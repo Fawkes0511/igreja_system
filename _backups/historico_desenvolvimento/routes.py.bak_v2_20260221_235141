@@ -1,0 +1,10 @@
+from flask import render_template
+from flask_login import login_required
+from . import eventos_bp
+from app.models.igreja import Congregacao
+
+@eventos_bp.route('/eventos', methods=['GET'])
+@login_required
+def eventos():
+    # Renderiza apenas a casca visual por enquanto
+    return render_template('main/eventos.html', congregacoes=Congregacao.query.all())

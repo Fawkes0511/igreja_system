@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block page_title %}Grupos e Funções{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos Premium Padrão do Sistema */
+    .dashboard-header { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 24px; margin-top: -10px; flex-wrap: wrap; gap: 16px; }
+    
+    .table-container { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f0f4f8; }
+    .table-premium { width: 100%; border-collapse: collapse; text-align: left; }
+    .table-premium th { background: #f8fafc; padding: 16px; font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+    .table-premium td { padding: 16px; border-bottom: 1px solid #f0f4f8; color: #334155; font-size: 0.95rem; vertical-align: middle; }
+    .table-premium tr:hover { background: #f8fafc; }
+    .table-premium tr:last-child td { border-bottom: none; }
+    
+    .badge { font-size: 0.8rem; padding: 6px 12px; border-radius: 20px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+    
+    .action-group { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: opacity 0.2s; }
+    .btn-icon:hover { opacity: 0.85; }
+
+    /* Modais Travados */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
+    .modal-content { background: #fff; border-radius: 16px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+    .modal-close { position: absolute; top: 16px; right: 16px; background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: 0.2s; }
+    .modal-close:hover { background: #e2e8f0; color: #0f172a; }
+
+    .detalhe-header { background: linear-gradient(135deg, var(--azul-marinho) 0%, #1e40af 100%); padding: 24px 32px; border-radius: 16px 16px 0 0; color: white; }
+    .detalhe-nome { font-size: 1.5rem; font-weight: 800; margin: 0 0 4px; }
+    
+    .scroll-list { border: 1px solid #cbd5e1; border-radius: 8px; max-height: 350px; overflow-y: auto; background: #fff; padding: 4px; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+    .list-item:last-child { border-bottom: none; }
+    .list-item:hover { background: #f8fafc; }
+
+    /* Grid Responsivo para a Página */
+    .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    @media(max-width: 992px) { .grid-layout { grid-template-columns: 1fr; } }
+</style>
+
+<div class="dashboard-header">
+    <button type="button" onclick="openModal('ministerio')" class="btn-primary" style="display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+        <i class="fas fa-plus"></i> Novo Ministério
+    </button>
+    <button type="button" onclick="openModal('funcao')" class="btn-primary" style="background: var(--verde-folha); display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+        <i class="fas fa-plus"></i> Nova Função
+    </button>
+</div>
+
+<div class="grid-layout">
+    <div>
+        <h3 style="margin-bottom: 16px; color: var(--azul-marinho); font-size: 1.25rem; font-weight: 700;">
+            Ministérios e Grupos
+        </h3>
+        
+        <div class="table-container" style="overflow-x: auto;">
+            <table class="table-premium">
+                <thead>
+                    <tr>
+                        <th>Ministério</th>
+                        <th>Membros Ativos</th>
+                        <th style="text-align: right;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if ministerios and ministerios|length > 0 %}
+                        {% for min in ministerios %}
+                        <tr>
+                            <td style="width: 45%;">
+                                <div style="font-weight: 700; color: var(--azul-marinho); font-size: 1.05rem;">{{ min.nome }}</div>
+                                <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">{{ min.descricao or 'Sem descrição' }}</div>
+                            </td>
+                            <td style="width: 30%;">
+                                <span class="badge">
+                                    <i class="fas fa-users" style="color: var(--azul-marinho);"></i> 
+                                    {{ min.membros_vinculados|length }} Membros
+                                </span>
+                            </td>
+                            <td style="width: 25%;">
+                                <div class="action-group">
+                                    <button type="button" class="btn-icon" style="background: #0ea5e9;" onclick="verDetalhesMinisterio({{ min.id }})" title="Ver Integrantes">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="openModal('ministerio', {id:'{{min.id}}', nome:'{{min.nome|escape}}', desc:'{{min.descricao|escape}}'})" title="Editar">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <a href="{{ url_for('grupos.deletar_ministerio', id=min.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar este ministério?')" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                <i class="fas fa-users-slash" style="font-size: 40px; margin-bottom: 12px; color: #cbd5e1; display: block;"></i>
+                                Nenhum ministério cadastrado.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <h3 style="margin-bottom: 16px; color: var(--azul-marinho); font-size: 1.25rem; font-weight: 700;">
+            Cargos e Funções
+        </h3>
+
+        <div class="table-container" style="overflow-x: auto;">
+            <table class="table-premium">
+                <thead>
+                    <tr>
+                        <th>Nome da Função</th>
+                        <th style="text-align: right;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if funcoes and funcoes|length > 0 %}
+                        {% for func in funcoes %}
+                        <tr>
+                            <td>
+                                <strong style="color: #334155;">{{ func.nome }}</strong>
+                            </td>
+                            <td>
+                                <div class="action-group">
+                                    <button type="button" class="btn-icon" style="background: var(--azul-marinho);" onclick="openModal('funcao', {id:'{{func.id}}', nome:'{{func.nome|escape}}'})" title="Editar">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <a href="{{ url_for('grupos.deletar_funcao', id=func.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar esta função?')" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="2" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                <i class="fas fa-tag" style="font-size: 30px; margin-bottom: 12px; color: #cbd5e1; display: block;"></i>
+                                Nenhuma função.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="modal-geral" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px; padding: 24px;">
+        <button class="modal-close" onclick="closeModal('modal-geral')">&times;</button>
+        <h3 id="modal-title" style="margin-bottom:24px; color:var(--azul-marinho); border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;"></h3>
+        
+        <form method="POST">
+            <input type="hidden" name="tipo_acao" id="tipo_acao">
+            <input type="hidden" name="item_id" id="item_id">
+            
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color: #334155;">Nome *</label>
+                <input type="text" name="nome" id="modal_nome" required style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; outline: none;">
+            </div>
+            
+            <div id="div-desc" style="margin-bottom:24px; display:none;">
+                <label style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color: #334155;">Descrição</label>
+                <input type="text" name="descricao" id="modal_desc" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; outline: none;">
+            </div>
+            
+            <button type="submit" class="btn-primary" style="width:100%; padding: 12px; border-radius: 8px; font-size: 1rem;"><i class="fas fa-save"></i> Salvar</button>
+        </form>
+    </div>
+</div>
+
+<div id="modal-detalhes-min" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+        <button class="modal-close" style="background: rgba(255,255,255,0.2); color: white;" onclick="closeModal('modal-detalhes-min')">&times;</button>
+        
+        <div class="detalhe-header">
+            <h2 id="detalhe-min-nome" class="detalhe-nome">Nome do Ministério</h2>
+            <div id="detalhe-min-desc" style="font-size: 0.95rem; opacity: 0.9;">Descrição</div>
+        </div>
+
+        <div style="padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="color: var(--azul-marinho); margin: 0; font-size: 14px;"><i class="fas fa-users"></i> Integrantes</h4>
+                <span id="detalhe-min-count" class="badge" style="background: #e2e8f0; border: none;">0 Membros</span>
+            </div>
+            
+            <div id="lista-integrantes" class="scroll-list">
+                </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// JSON consolidado para o Modal de Detalhes, agora COM FOTO
+const ministeriosData = [
+    {% for min in ministerios %}
+    {
+        id: {{ min.id }},
+        nome: {{ min.nome | tojson | safe }},
+        descricao: {{ (min.descricao or 'Sem descrição') | tojson | safe }},
+        membros: [
+            {% for v in min.membros_vinculados %}
+            {
+                nome: {{ v.membro.nome | tojson | safe }},
+                funcao: {{ v.funcao.nome | tojson | safe }},
+                congregacoes: {{ (v.membro.congregações|map(attribute='nome')|join(', ') if v.membro.congregações else 'Sede/Geral') | tojson | safe }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function openModal(tipo, data = null) {
+    document.getElementById('tipo_acao').value = tipo === 'ministerio' ? 'novo_ministerio' : 'nova_funcao';
+    document.getElementById('modal-title').innerHTML = data ? `<i class="fas fa-edit"></i> Editar ${tipo === 'ministerio' ? 'Ministério' : 'Função'}` : `<i class="fas fa-plus"></i> Novo ${tipo === 'ministerio' ? 'Ministério' : 'Função'}`;
+    
+    document.getElementById('item_id').value = data ? data.id : '';
+    document.getElementById('modal_nome').value = data ? data.nome : '';
+    
+    if(tipo === 'ministerio') {
+        document.getElementById('div-desc').style.display = 'block';
+        document.getElementById('modal_desc').value = data ? data.desc : '';
+    } else {
+        document.getElementById('div-desc').style.display = 'none';
+    }
+    
+    document.getElementById('modal-geral').style.display = 'flex';
+}
+
+function verDetalhesMinisterio(id) {
+    const min = ministeriosData.find(m => m.id === id);
+    if (!min) return;
+
+    document.getElementById('detalhe-min-nome').innerText = min.nome;
+    document.getElementById('detalhe-min-desc').innerText = min.descricao;
+    document.getElementById('detalhe-min-count').innerText = `${min.membros.length} Membro(s)`;
+
+    const lista = document.getElementById('lista-integrantes');
+    if (min.membros.length > 0) {
+        lista.innerHTML = min.membros.map(m => `
+            <div class="list-item">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; background: #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #64748b;">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; color: #0f172a; margin-bottom: 2px;">${m.nome}</div>
+                        <div style="font-size: 0.75rem; color: #64748b;"><i class="fas fa-church"></i> ${m.congregacoes}</div>
+                    </div>
+                </div>
+                <div style="background: #fff7ed; color: var(--laranja-fogo); padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; border: 1px solid #ffedd5;">
+                    ${m.funcao}
+                </div>
+            </div>
+        `).join('');
+    } else {
+        lista.innerHTML = '<div style="padding: 30px; text-align: center; color: #94a3b8; font-style: italic;">Nenhum membro cadastrado neste ministério ainda.</div>';
+    }
+
+    document.getElementById('modal-detalhes-min').style.display = 'flex';
+}
+</script>
+{% endblock %}

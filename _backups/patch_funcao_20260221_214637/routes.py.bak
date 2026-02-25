@@ -1,0 +1,109 @@
+from flask import render_template, request, redirect, url_for, flash
+from flask_login import login_required
+from sqlalchemy.exc import IntegrityError
+
+from app.models import db
+from app.models.igreja import Ministerio, Funcao, MembroMinisterio, Membro
+from . import grupos_bp
+
+
+@grupos_bp.route('/grupos', methods=['GET', 'POST'])
+@login_required
+def grupos():
+    if request.method == 'POST':
+        t = request.form.get('tipo_acao')
+        i = request.form.get('item_id')
+
+        if t == 'novo_ministerio':
+            m = Ministerio.query.get(i) if i else Ministerio()
+            if not i:
+                db.session.add(m)
+            m.nome = request.form.get('nome')
+            m.descricao = request.form.get('descricao')
+
+        elif t == 'nova_funcao':
+            f = Funcao.query.get(i) if i else Funcao()
+            if not i:
+                db.session.add(f)
+            f.nome = request.form.get('nome')
+
+        db.session.commit()
+        return redirect(url_for('grupos.grupos'))
+
+    return render_template(
+        'main/grupos.html',
+        ministerios=Ministerio.query.all(),
+        funcoes=Funcao.query.all()
+    )
+
+
+@grupos_bp.route('/ministerio/deletar/<int:id>')
+@login_required
+def deletar_ministerio(id):
+    m = Ministerio.query.get_or_404(id)
+    db.session.delete(m)
+    db.session.commit()
+    return redirect(url_for('grupos.grupos'))
+
+
+@grupos_bp.route('/funcao/deletar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def deletar_funcao(id):
+    """
+    Regra:
+    - Se a função estiver vinculada a alguém (membro_ministerio), NÃO pode apagar direto.
+    - Mostra uma confirmação (GET) listando quem usa.
+    - No POST: remove os vínculos e apaga a função.
+    """
+    f = Funcao.query.get_or_404(id)
+
+    # pega vínculos para exibir/contar
+    vinculos = (
+        db.session.query(
+            MembroMinisterio.membro_id,
+            Membro.nome.label("membro_nome"),
+            Ministerio.nome.label("ministerio_nome"),
+        )
+        .join(Membro, Membro.id == MembroMinisterio.membro_id)
+        .join(Ministerio, Ministerio.id == MembroMinisterio.ministerio_id)
+        .filter(MembroMinisterio.funcao_id == id)
+        .order_by(Ministerio.nome.asc(), Membro.nome.asc())
+        .all()
+    )
+
+    if request.method == 'GET':
+        # “caixinha”/tela de confirmação
+        return render_template(
+            'main/confirm_delete_funcao.html',
+            funcao=f,
+            vinculos=vinculos
+        )
+
+    # POST: executar exclusão
+    funcao_nome = f.nome
+    qtd = len(vinculos)
+
+    try:
+        if qtd > 0:
+            # remove vínculos (desassocia o membro dessa função dentro daquele ministério)
+            MembroMinisterio.query.filter_by(funcao_id=id).delete(synchronize_session=False)
+
+        db.session.delete(f)
+        db.session.commit()
+
+        if qtd > 0:
+            flash(
+                f"Função '{funcao_nome}' excluída. {qtd} vínculo(s) removido(s) — os membros ficaram sem função nesse ministério.",
+                "success"
+            )
+        else:
+            flash(f"Função '{funcao_nome}' excluída.", "success")
+
+    except IntegrityError:
+        db.session.rollback()
+        flash(
+            f"Não foi possível excluir a função '{funcao_nome}' porque ainda existem vínculos no sistema.",
+            "error"
+        )
+
+    return redirect(url_for('grupos.grupos'))

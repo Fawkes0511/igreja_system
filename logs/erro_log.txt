@@ -1,0 +1,27 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+> GET /dashboard HTTP/1.1
+> Host: 127.0.0.1:8080
+> User-Agent: curl/8.5.0
+> Accept: */*
+> 
+< HTTP/1.1 302 FOUND
+< Server: gunicorn
+< Date: Tue, 03 Feb 2026 17:27:26 GMT
+< Connection: close
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 245
+< Location: /auth/login?next=%2Fdashboard
+< Vary: Cookie
+< Set-Cookie: session=eyJfZmxhc2hlcyI6W3siIHQiOlsibWVzc2FnZSIsIlBsZWFzZSBsb2cgaW4gdG8gYWNjZXNzIHRoaXMgcGFnZS4iXX1dfQ.aYIv_g.8mBYSVsuy4sEdEZHNCiJNDOWbMw; Secure; HttpOnly; Path=/; SameSite=Lax
+< 
+{ [245 bytes data]
+100   245  100   245    0     0  55923      0 --:--:-- --:--:-- --:--:-- 61250
+* Closing connection
+<!doctype html>
+<html lang=en>
+<title>Redirecting...</title>
+<h1>Redirecting...</h1>
+<p>You should be redirected automatically to the target URL: <a href="/auth/login?next=%2Fdashboard">/auth/login?next=%2Fdashboard</a>. If not, click the link.

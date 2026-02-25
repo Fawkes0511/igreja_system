@@ -1,0 +1,67 @@
+from flask import render_template, request, redirect, url_for, flash
+from flask_login import login_required
+from sqlalchemy.exc import IntegrityError
+
+from app.models import db
+from app.models.igreja import Ministerio, Funcao, MembroMinisterio, Membro
+from . import grupos_bp
+
+
+@grupos_bp.route('/grupos', methods=['GET', 'POST'])
+@login_required
+def grupos():
+    if request.method == 'POST':
+        t = request.form.get('tipo_acao')
+        i = request.form.get('item_id')
+
+        if t == 'novo_ministerio':
+            m = Ministerio.query.get(i) if i else Ministerio()
+            if not i:
+                db.session.add(m)
+            m.nome = request.form.get('nome')
+            m.descricao = request.form.get('descricao')
+
+        elif t == 'nova_funcao':
+            f = Funcao.query.get(i) if i else Funcao()
+            if not i:
+                db.session.add(f)
+            f.nome = request.form.get('nome')
+
+        db.session.commit()
+        return redirect(url_for('grupos.grupos'))
+
+    return render_template(
+        'main/grupos.html',
+        ministerios=Ministerio.query.all(),
+        funcoes=Funcao.query.all()
+    )
+
+
+@grupos_bp.route('/ministerio/deletar/<int:id>')
+@login_required
+def deletar_ministerio(id):
+    m = Ministerio.query.get_or_404(id)
+    db.session.delete(m)
+    db.session.commit()
+    return redirect(url_for('grupos.grupos'))
+
+
+@grupos_bp.route('/funcao/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_funcao(id):
+    f = Funcao.query.get_or_404(id)
+
+    try:
+        # remove vínculos primeiro (FK safe)
+        MembroMinisterio.query.filter_by(funcao_id=id).delete(synchronize_session=False)
+
+        db.session.delete(f)
+        db.session.commit()
+        flash(f"Função '{f.nome}' excluída com sucesso.", "success")
+
+    except IntegrityError:
+        db.session.rollback()
+        flash("Não foi possível excluir a função por causa de vínculos no banco.", "error")
+
+    return redirect(url_for('grupos.grupos'))
+

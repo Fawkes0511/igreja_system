@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema Shekinah PE</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Merriweather:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --azul-marinho: #192A56;
+            --verde-folha: #27AE60;
+            --laranja-fogo: #E67E22;
+            --amarelo-dourado: #F1C40F;
+            --cinza-fundo: #f4f7f9;
+            --cinza-borda: #dfe4ea;
+            --preto-texto: #333333;
+            --cinza-texto: #6c757d;
+            --font-principal: 'Merriweather', serif;
+            --font-secundaria: 'Lato', sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: var(--font-secundaria ); background-color: var(--cinza-fundo); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-container { display: flex; width: 100%; max-width: 960px; min-height: 600px; background: white; border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08); overflow: hidden; }
+        
+        .login-form-section { flex: 1; padding: 50px 60px; display: flex; flex-direction: column; justify-content: center; background: white; }
+        .form-header h1 { font-family: var(--font-principal); font-weight: 900; font-size: 28px; color: var(--preto-texto); margin-bottom: 10px; }
+        .form-header p { color: var(--cinza-texto); font-size: 16px; margin-bottom: 40px; }
+        .login-form { width: 100%; }
+        .form-group { margin-bottom: 25px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 14px; color: #495057; }
+        .form-control { width: 100%; padding: 14px 16px; border: 1px solid var(--cinza-borda); border-radius: 8px; font-size: 16px; transition: border-color 0.2s; }
+        .form-control:focus { outline: none; border-color: var(--azul-marinho); box-shadow: 0 0 0 4px rgba(25, 42, 86, 0.1); }
+        .btn-login { width: 100%; padding: 15px; background-color: var(--azul-marinho); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background-color 0.2s; margin-top: 10px; }
+        .btn-login:hover { background-color: #121f3d; transform: translateY(-2px); }
+        
+        .info-section { flex: 1; background: var(--azul-marinho); color: white; padding: 60px 50px; display: flex; flex-direction: column; justify-content: center; position: relative; text-align: center; }
+        .info-content { position: relative; z-index: 2; }
+        .info-logo-text { font-family: var(--font-principal); font-weight: 900; font-size: 36px; margin-bottom: 15px; border-bottom: 3px solid var(--amarelo-dourado); padding-bottom: 15px; display: inline-block; }
+        .info-subtitle { font-size: 18px; opacity: 0.9; margin-bottom: 30px; }
+        .info-description { font-size: 16px; line-height: 1.7; opacity: 0.8; }
+        
+        .alert { padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; font-weight: 700; text-align: center; }
+        .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        @media (max-width: 900px) { .login-container { flex-direction: column; } .info-section { order: -1; padding: 50px 40px; text-align: center; } }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-form-section">
+            <div class="form-header">
+                <h1>Bem-vindo de volta</h1>
+                <p>Acesse o painel de gestão com suas credenciais.</p>
+            </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% set category, message = messages[-1] %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'info' }}">
+                        {{ message }}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form class="login-form" method="POST" action="{{ url_for('auth.login') }}">
+                <div class="form-group">
+                    <label for="email">Usuário</label>
+                    <input type="text" id="email" name="email" class="form-control" placeholder="Digite seu usuário" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="senha">Senha</label>
+                    <input type="password" id="senha" name="senha" class="form-control" placeholder="Sua senha" required>
+                </div>
+                <button type="submit" class="btn-login">Entrar no Sistema</button>
+            </form>
+        </div>
+        <div class="info-section">
+            <div class="info-content">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Shekinah PE Logo" style="max-width: 240px; height: auto; margin-bottom: 20px;" onerror="this.style.display='none'; document.getElementById('fallback-text').style.display='inline-block';">
+                
+                <h2 id="fallback-text" class="info-logo-text" style="display: none;">Shekinah PE</h2>
+                
+                <p class="info-subtitle">Sistema de Gestão Eclesiástica</p>
+                <p class="info-description">Uma plataforma completa para fortalecer a administração e a comunhão da nossa igreja.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

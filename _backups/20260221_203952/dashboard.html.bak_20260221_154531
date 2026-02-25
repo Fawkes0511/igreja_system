@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block page_title %}Cadastro de Membros{% endblock %}
+{% block content %}
+
+<div class="card" style="margin-bottom: 30px;">
+    <form method="POST" id="membro-form" enctype="multipart/form-data">
+        <input type="hidden" name="membro_id" id="membro_id">
+
+        <div style="margin-bottom: 20px; text-align: center;">
+            <label for="foto" style="cursor: pointer; display: inline-block;">
+                <div style="width: 100px; height: 100px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px dashed var(--cinza-borda);">
+                    <i class="fas fa-camera" style="font-size: 24px; color: var(--cinza-texto);"></i>
+                </div>
+                <span style="font-size: 12px; color: var(--azul-marinho); display: block; margin-top: 5px;">Alterar Foto</span>
+            </label>
+            <input type="file" name="foto" id="foto" accept="image/*" style="display: none;">
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Nome Completo *</label>
+                <input type="text" name="nome" id="nome" required style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Data de Nascimento *</label>
+                <input type="date" name="data_nascimento" id="data_nascimento" required style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Tipo de Membro</label>
+                <select name="tipo_membro" id="tipo_membro" onchange="toggleCamposCrianca()" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+                    <option value="Adulto">Adulto</option>
+                    <option value="Criança">Criança</option>
+                    <option value="Visitante">Visitante</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Data de Batismo</label>
+                <input type="date" name="data_batismo" id="data_batismo" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Ministério Inicial</label>
+                <select name="ministerio_id" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+                    <option value="">Nenhum</option>
+                    {% for min in ministerios %}
+                    <option value="{{ min.id }}">{{ min.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="campos-crianca" style="display: none; background: rgba(39, 174, 96, 0.05); border: 1px solid var(--verde-folha); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h4 style="color: var(--verde-folha); margin-bottom: 15px; font-size: 15px;"><i class="fas fa-child"></i> Informações da Criança</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--verde-folha);">Responsáveis (Pai/Mãe)</label>
+                    <input type="text" name="responsaveis" id="responsaveis" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+                </div>
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--verde-folha);">Informações Médicas / Alergias</label>
+                    <input type="text" name="info_medica" id="info_medica" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+                </div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px;">
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Função Inicial</label>
+                <select name="funcao_id" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;">
+                    <option value="">Nenhuma</option>
+                    {% for func in funcoes %}
+                    <option value="{{ func.id }}">{{ func.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Congregações</label>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 5px;">
+                    {% for cong in congregacoes %}
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                        <input type="checkbox" name="congregacoes[]" value="{{ cong.id }}" id="cong_{{ cong.id }}">
+                        <span>{{ cong.nome }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+            <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--azul-marinho);">Observações Adicionais</label>
+            <textarea name="observacoes" id="observacoes" rows="3" style="width: 100%; padding: 12px; border: 1px solid var(--cinza-borda); border-radius: 6px;"></textarea>
+        </div>
+
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <button type="submit" class="btn-primary" style="padding: 12px 30px;">
+                <i class="fas fa-save"></i> Salvar Membro
+            </button>
+            <button type="button" onclick="resetForm()" style="background: none; border: none; color: var(--cinza-texto); cursor: pointer; font-weight: 700; padding: 12px 20px;">
+                <i class="fas fa-eraser"></i> Limpar
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3 style="color: var(--azul-marinho); margin-bottom: 20px;">Membros Cadastrados</h3>
+    
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--cinza-fundo);">
+                    <th style="padding: 12px 15px; text-align: left;">Nome</th>
+                    <th style="padding: 12px 15px; text-align: left;">Tipo</th>
+                    <th style="padding: 12px 15px; text-align: left;">Congregações</th>
+                    <th style="padding: 12px 15px; text-align: left;">Ministério</th>
+                    <th style="padding: 12px 15px; text-align: left;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in membros %}
+                <tr style="border-bottom: 1px solid var(--cinza-borda);">
+                    <td style="padding: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            {% if m.foto_path %}
+                            <img src="{{ url_for('static', filename=m.foto_path) }}" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;">
+                            {% endif %}
+                            <div>
+                                <div style="font-weight: 700;">{{ m.nome }}</div>
+                                {% if m.responsaveis %}
+                                <div style="font-size: 11px; color: var(--cinza-texto);">Resp: {{ m.responsaveis }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding: 15px;">{{ m.tipo }}</td>
+                    <td style="padding: 15px;">
+                        {% for c in m.congregações %}<span style="font-size: 11px; background: #eee; padding: 2px 5px; margin-right: 3px;">{{ c.nome }}</span>{% endfor %}
+                    </td>
+                    <td style="padding: 15px;">
+                        {% for vinculo in m.vinculos_ministerio %}
+                        <div style="font-size: 12px;">{{ vinculo.ministerio.nome }} - {{ vinculo.funcao.nome }}</div>
+                        {% endfor %}
+                    </td>
+                    <td style="padding: 15px;">
+                        <button onclick="prepararEdicao({{ m.id }})" style="border: 1px solid var(--azul-marinho); background: white; color: var(--azul-marinho); cursor: pointer; padding: 5px 10px; border-radius: 4px;">Editar</button>
+                        <a href="{{ url_for('main.deletar_membro', id=m.id) }}" onclick="return confirm('Apagar?')" style="color: red; margin-left: 10px;">Excluir</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+const membrosData = {{ membros_json | tojson }};
+
+function toggleCamposCrianca() {
+    const tipo = document.getElementById('tipo_membro').value;
+    const divCrianca = document.getElementById('campos-crianca');
+    if (divCrianca) {
+        divCrianca.style.display = (tipo === 'Criança') ? 'block' : 'none';
+    }
+}
+
+function prepararEdicao(id) {
+    const m = membrosData.find(item => item.id === id);
+    if (!m) return;
+
+    document.getElementById('membro_id').value = m.id;
+    document.getElementById('nome').value = m.nome;
+    document.getElementById('data_nascimento').value = m.data_nascimento;
+    document.getElementById('data_batismo').value = m.data_batismo;
+    document.getElementById('tipo_membro').value = m.tipo;
+    document.getElementById('responsaveis').value = m.responsaveis || '';
+    document.getElementById('info_medica').value = m.info_medica || '';
+    document.getElementById('observacoes').value = m.observacoes || '';
+
+    // Limpar checkboxes
+    document.querySelectorAll('input[name="congregacoes[]"]').forEach(cb => cb.checked = false);
+    
+    if (m.congregações) {
+        m.congregações.forEach(c => {
+            const cb = document.getElementById('cong_' + c.id);
+            if(cb) cb.checked = true;
+        });
+    }
+
+    toggleCamposCrianca();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetForm() {
+    document.getElementById('membro-form').reset();
+    document.getElementById('membro_id').value = '';
+    toggleCamposCrianca();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCamposCrianca();
+});
+</script>
+{% endblock %}

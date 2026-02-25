@@ -1,0 +1,361 @@
+import os
+from datetime import datetime
+
+from flask import redirect, url_for, render_template, request, flash, jsonify, current_app
+from flask_login import login_required
+from werkzeug.utils import secure_filename
+
+from app.main import main_bp
+from app.models import db
+from app.models.igreja import (
+    Membro, Congregacao, Ministerio, Funcao, MembroMinisterio,
+    Evento, Inscricao, Agenda, Presenca
+)
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def _get_attr(obj, name: str, default=None):
+    return getattr(obj, name, default)
+
+def _set_if_exists(obj, name: str, value):
+    if hasattr(obj, name):
+        setattr(obj, name, value)
+
+@main_bp.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    if request.method == 'POST':
+        try:
+            membro_id = request.form.get('membro_id')
+            data_nasc_str = request.form.get('data_nascimento')
+            data_batismo_str = request.form.get('data_batismo')
+
+            data_nasc = datetime.strptime(data_nasc_str, '%Y-%m-%d').date() if data_nasc_str else None
+            data_batismo = datetime.strptime(data_batismo_str, '%Y-%m-%d').date() if data_batismo_str else None
+
+            if membro_id:
+                membro = Membro.query.get_or_404(membro_id)
+                msg = 'Membro atualizado com sucesso!'
+            else:
+                membro = Membro()
+                db.session.add(membro)
+                msg = 'Membro cadastrado com sucesso!'
+
+            membro.nome = request.form.get('nome')
+            membro.data_nascimento = data_nasc
+            membro.tipo = request.form.get('tipo_membro')
+            membro.observacoes = request.form.get('observacoes')
+
+            _set_if_exists(membro, 'data_batismo', data_batismo)
+            _set_if_exists(membro, 'responsaveis', request.form.get('responsaveis'))
+            _set_if_exists(membro, 'alergias', request.form.get('info_medica'))
+
+            cong_ids = request.form.getlist('congregacoes[]')
+            if cong_ids:
+                membro.congregações = Congregacao.query.filter(Congregacao.id.in_(cong_ids)).all()
+
+            if 'foto' in request.files:
+                file = request.files['foto']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(f"membro_{datetime.now().timestamp()}_{file.filename}")
+                    upload_folder = os.path.join(current_app.root_path, 'static/img/membros')
+                    os.makedirs(upload_folder, exist_ok=True)
+                    file.save(os.path.join(upload_folder, filename))
+                    _set_if_exists(membro, 'foto_path', f'img/membros/{filename}')
+
+            db.session.flush()
+
+            if not membro_id:
+                min_id = request.form.get('ministerio_id')
+                func_id = request.form.get('funcao_id')
+                if min_id and func_id:
+                    db.session.add(MembroMinisterio(membro_id=membro.id, ministerio_id=min_id, funcao_id=func_id))
+
+            db.session.commit()
+            flash(msg, 'success')
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao salvar: {str(e)}', 'danger')
+            current_app.logger.exception(e)
+
+        return redirect(url_for('main.dashboard'))
+
+    membros = Membro.query.order_by(Membro.nome).all()
+
+    membros_json = []
+    for m in membros:
+        data_bat = _get_attr(m, 'data_batismo', None)
+        membros_json.append({
+            'id': m.id,
+            'nome': m.nome,
+            'data_nascimento': m.data_nascimento.strftime('%Y-%m-%d') if m.data_nascimento else '',
+            'data_batismo': data_bat.strftime('%Y-%m-%d') if data_bat else '',
+            'tipo': m.tipo,
+            'responsaveis': _get_attr(m, 'responsaveis', ''),
+            'info_medica': _get_attr(m, 'alergias', ''),
+            'observacoes': _get_attr(m, 'observacoes', ''),
+            'congregações': [{'id': c.id} for c in getattr(m, 'congregações', [])],
+        })
+
+    return render_template(
+        'main/dashboard.html',
+        congregacoes=Congregacao.query.all(),
+        ministerios=Ministerio.query.all(),
+        funcoes=Funcao.query.all(),
+        membros=membros,
+        membros_json=membros_json
+    )
+
+@main_bp.route('/eventos', methods=['GET', 'POST'])
+@login_required
+def eventos():
+    if request.method == 'POST':
+        tipo = request.form.get('tipo_acao')
+        id_edicao = request.form.get('id_edicao')
+
+        if tipo == 'novo_evento':
+            data_str = request.form.get('data_evento')
+            data_dt = datetime.strptime(data_str, '%Y-%m-%dT%H:%M')
+            novo = Evento(
+                titulo=request.form.get('titulo'),
+                descricao=request.form.get('descricao'),
+                data_evento=data_dt,
+                congregacao_id=request.form.get('congregacao_id'),
+                permite_inscricao='permite_inscricao' in request.form
+            )
+            db.session.add(novo)
+
+        elif tipo == 'editar_evento':
+            evento = Evento.query.get_or_404(id_edicao)
+            evento.titulo = request.form.get('titulo')
+            evento.descricao = request.form.get('descricao')
+            evento.data_evento = datetime.strptime(request.form.get('data_evento'), '%Y-%m-%dT%H:%M')
+            evento.congregacao_id = request.form.get('congregacao_id')
+            evento.permite_inscricao = 'permite_inscricao' in request.form
+
+        elif tipo == 'nova_agenda':
+            horario = datetime.strptime(request.form.get('horario'), '%H:%M').time()
+            nova = Agenda(
+                titulo=request.form.get('titulo'),
+                dia_semana=int(request.form.get('dia_semana')),
+                horario=horario,
+                tipo=request.form.get('tipo'),
+                congregacao_id=request.form.get('congregacao_id')
+            )
+            db.session.add(nova)
+
+        elif tipo == 'editar_agenda':
+            agenda = Agenda.query.get_or_404(id_edicao)
+            agenda.titulo = request.form.get('titulo')
+            agenda.dia_semana = int(request.form.get('dia_semana'))
+            agenda.horario = datetime.strptime(request.form.get('horario'), '%H:%M').time()
+            agenda.tipo = request.form.get('tipo')
+            agenda.congregacao_id = request.form.get('congregacao_id')
+
+        db.session.commit()
+        return redirect(url_for('main.eventos'))
+
+    return render_template(
+        'main/eventos.html',
+        eventos=Evento.query.order_by(Evento.data_evento).all(),
+        agenda=Agenda.query.order_by(Agenda.dia_semana, Agenda.horario).all(),
+        congregacoes=Congregacao.query.all()
+    )
+
+@main_bp.route('/evento/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_evento(id):
+    evento = Evento.query.get_or_404(id)
+    db.session.delete(evento)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@main_bp.route('/agenda/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_agenda(id):
+    agenda = Agenda.query.get_or_404(id)
+    db.session.delete(agenda)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@main_bp.route('/evento/dados/<int:id>', methods=['GET'])
+@login_required
+def dados_evento(id):
+    evento = Evento.query.get_or_404(id)
+    return jsonify({
+        'titulo': evento.titulo,
+        'descricao': evento.descricao,
+        'data_evento': evento.data_evento.strftime('%Y-%m-%dT%H:%M'),
+        'congregacao_id': evento.congregacao_id,
+        'permite_inscricao': evento.permite_inscricao
+    })
+
+@main_bp.route('/agenda/dados/<int:id>', methods=['GET'])
+@login_required
+def dados_agenda(id):
+    agenda = Agenda.query.get_or_404(id)
+    return jsonify({
+        'titulo': agenda.titulo,
+        'dia_semana': agenda.dia_semana,
+        'horario': agenda.horario.strftime('%H:%M'),
+        'tipo': agenda.tipo,
+        'congregacao_id': agenda.congregacao_id
+    })
+
+@main_bp.route('/congregacoes', methods=['GET', 'POST'])
+@login_required
+def congregacoes():
+    if request.method == 'POST':
+        cong_id = request.form.get('cong_id')
+        if cong_id:
+            cong = Congregacao.query.get(cong_id)
+            cong.nome = request.form.get('nome')
+            cong.endereco = request.form.get('endereco')
+        else:
+            db.session.add(Congregacao(
+                nome=request.form.get('nome'),
+                endereco=request.form.get('endereco')
+            ))
+        db.session.commit()
+        return redirect(url_for('main.congregacoes'))
+
+    return render_template('main/congregacoes.html', congregacoes=Congregacao.query.all())
+
+@main_bp.route('/grupos', methods=['GET', 'POST'])
+@login_required
+def grupos():
+    if request.method == 'POST':
+        tipo = request.form.get('tipo_acao')
+        item_id = request.form.get('item_id')
+
+        if tipo == 'novo_ministerio':
+            if item_id:
+                minis = Ministerio.query.get(item_id)
+                minis.nome = request.form.get('nome')
+                minis.descricao = request.form.get('descricao')
+            else:
+                db.session.add(Ministerio(
+                    nome=request.form.get('nome'),
+                    descricao=request.form.get('descricao')
+                ))
+
+        elif tipo == 'nova_funcao':
+            if item_id:
+                func = Funcao.query.get(item_id)
+                func.nome = request.form.get('nome')
+            else:
+                db.session.add(Funcao(nome=request.form.get('nome')))
+
+        db.session.commit()
+        return redirect(url_for('main.grupos'))
+
+    return render_template('main/grupos.html', ministerios=Ministerio.query.all(), funcoes=Funcao.query.all())
+
+@main_bp.route('/membro/deletar/<int:id>')
+@login_required
+def deletar_membro(id):
+    db.session.delete(Membro.query.get_or_404(id))
+    db.session.commit()
+    flash('Membro removido!', 'success')
+    return redirect(url_for('main.dashboard'))
+
+@main_bp.route('/congregacao/deletar/<int:id>')
+@login_required
+def deletar_congregacao(id):
+    db.session.delete(Congregacao.query.get_or_404(id))
+    db.session.commit()
+    return redirect(url_for('main.congregacoes'))
+
+@main_bp.route('/ministerio/deletar/<int:id>')
+@login_required
+def deletar_ministerio(id):
+    db.session.delete(Ministerio.query.get_or_404(id))
+    db.session.commit()
+    return redirect(url_for('main.grupos'))
+
+@main_bp.route('/funcao/deletar/<int:id>')
+@login_required
+def deletar_funcao(id):
+    db.session.delete(Funcao.query.get_or_404(id))
+    db.session.commit()
+    return redirect(url_for('main.grupos'))
+
+@main_bp.route('/evento/<int:evento_id>/presenca', methods=['GET', 'POST'])
+@login_required
+def gestao_presenca(evento_id):
+    evento = Evento.query.get_or_404(evento_id)
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        for item in data.get('presencas', []):
+            presenca = Presenca.query.filter_by(evento_id=evento_id, membro_id=item['membro_id']).first()
+            if not presenca:
+                presenca = Presenca(evento_id=evento_id, membro_id=item['membro_id'])
+                db.session.add(presenca)
+
+            presenca.presente = item.get('presente', False)
+
+            if item.get('presente'):
+                if not presenca.checkin_time:
+                    presenca.checkin_time = datetime.utcnow()
+            else:
+                presenca.checkin_time = None
+
+            presenca.observacoes = item.get('observacoes', '')
+
+        db.session.commit()
+        return jsonify({'success': True})
+
+    membros = Membro.query.filter_by(ativo=True).order_by(Membro.nome).all()
+    presencas_existentes = Presenca.query.filter_by(evento_id=evento_id).all()
+    presenca_dict = {p.membro_id: p for p in presencas_existentes}
+    return render_template('main/presenca_evento.html', evento=evento, membros=membros, presencas=presenca_dict)
+
+@main_bp.route('/evento/<int:evento_id>/gerar_lista', methods=['GET', 'POST'])
+@login_required
+def gerar_lista_presenca(evento_id):
+    evento = Evento.query.get_or_404(evento_id)
+
+    if request.method == 'POST':
+        membros_ids = request.form.getlist('membros[]')
+        if not getattr(evento, 'codigo_checkin', None):
+            import secrets
+            evento.codigo_checkin = f"EV{evento_id}_{secrets.token_hex(8)}"
+            db.session.commit()
+
+        for membro_id in membros_ids:
+            if not Presenca.query.filter_by(evento_id=evento_id, membro_id=membro_id).first():
+                db.session.add(Presenca(evento_id=evento_id, membro_id=membro_id))
+
+        db.session.commit()
+        return redirect(url_for('main.gestao_presenca', evento_id=evento_id))
+
+    membros = Membro.query.filter_by(ativo=True).order_by(Membro.nome).all()
+    return render_template('main/gerar_lista_modal.html', evento=evento, membros=membros)
+
+@main_bp.route('/checkin/qr/<codigo>', methods=['GET', 'POST'])
+def checkin_qr(codigo):
+    evento = Evento.query.filter_by(codigo_checkin=codigo).first_or_404()
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        membro_id = data.get('membro_id')
+        if not membro_id:
+            return jsonify({'error': 'ID inválido'}), 400
+
+        presenca = Presenca.query.filter_by(evento_id=evento.id, membro_id=membro_id).first()
+        if not presenca:
+            presenca = Presenca(evento_id=evento.id, membro_id=membro_id)
+            db.session.add(presenca)
+
+        presenca.presente = True
+        presenca.checkin_time = datetime.utcnow()
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Check-in OK!'})
+
+    membros = Membro.query.filter_by(ativo=True).order_by(Membro.nome).all()
+    return render_template('main/checkin_qr.html', evento=evento, membros=membros, codigo=codigo)

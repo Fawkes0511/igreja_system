@@ -1,0 +1,218 @@
+from PIL import Image
+import os, secrets
+from datetime import datetime
+from flask import redirect, url_for, render_template, request, flash, jsonify, current_app
+from flask_login import login_required
+from werkzeug.utils import secure_filename
+from app.main import main_bp
+from app.models import db
+from app.models.igreja import (
+    Membro, Congregacao, Ministerio, Funcao, MembroMinisterio,
+    Evento, Inscricao, Agenda, Presenca
+)
+
+def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
+def _get_attr(obj, name, default=None): return getattr(obj, name, default)
+def _set_if_exists(obj, name, value):
+    if hasattr(obj, name): setattr(obj, name, value)
+
+@main_bp.route('/membros', methods=['GET', 'POST'])
+@login_required
+def membros_page():
+    if request.method == 'POST':
+        try:
+            membro_id = request.form.get('membro_id')
+            membro = Membro.query.get(membro_id) if membro_id else Membro()
+            if not membro_id: db.session.add(membro)
+            membro.nome, membro.tipo = request.form.get('nome'), request.form.get('tipo_membro')
+            membro.observacoes, membro.responsaveis, membro.alergias = request.form.get('observacoes'), request.form.get('responsaveis'), request.form.get('info_medica')
+            if request.form.get('data_nascimento'): membro.data_nascimento = datetime.strptime(request.form.get('data_nascimento'), '%Y-%m-%d').date()
+            if request.form.get('data_batismo'): membro.data_batismo = datetime.strptime(request.form.get('data_batismo'), '%Y-%m-%d').date()
+            membro.congregações = Congregacao.query.filter(Congregacao.id.in_(request.form.getlist('congregacoes[]'))).all()
+            if 'foto' in request.files and request.files['foto'].filename != '':
+                f = request.files['foto']
+                fname = secure_filename(f"membro_{datetime.now().timestamp()}.jpg")
+                up_dir = os.path.join(os.path.dirname(current_app.root_path), 'app/static/img/membros')
+                os.makedirs(up_dir, exist_ok=True)
+                fpath = os.path.join(up_dir, fname)
+                try:
+                    img = Image.open(f)
+                    if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                    img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+                    img.save(fpath, optimize=True, quality=85)
+                except:
+                    f.seek(0); f.save(fpath)
+                membro.foto_path = f'img/membros/{fname}'
+            db.session.flush()
+            MembroMinisterio.query.filter_by(membro_id=membro.id).delete()
+            for m_id in request.form.getlist('ministerios[]'):
+                for f_id in request.form.getlist('funcoes[]'):
+                    db.session.add(MembroMinisterio(membro_id=membro.id, ministerio_id=m_id, funcao_id=f_id))
+            db.session.commit(); flash('Membro salvo!', 'success')
+        except Exception as e:
+            db.session.rollback(); flash(f'Erro: {e}', 'danger')
+        return redirect(url_for('main.membros_page'))
+
+    membros = Membro.query.order_by(Membro.nome).all()
+    m_json = []
+    for m in membros:
+        vinc = [{'ministerio': {'nome': v.ministerio.nome}, 'funcao': {'nome': v.funcao.nome}} for v in getattr(m, 'ministerios_vinculados', [])]
+        m_json.append({
+            'id': m.id, 'nome': m.nome, 'tipo': m.tipo, 'foto_path': m.foto_path or '',
+            'data_nascimento': m.data_nascimento.isoformat() if m.data_nascimento else '',
+            'data_batismo': m.data_batismo.isoformat() if m.data_batismo else '',
+            'congregações': [{'id': c.id, 'nome': c.nome} for c in m.congregações],
+            'vinculos_ministerio': vinc, 'responsaveis': m.responsaveis or '', 'info_medica': m.alergias or '', 'observacoes': m.observacoes or ''
+        })
+    return render_template('main/membros.html', congregacoes=Congregacao.query.all(), ministerios=Ministerio.query.all(), funcoes=Funcao.query.all(), membros=membros, membros_json=m_json)
+
+# --- EVENTOS E AGENDA ---
+@main_bp.route('/eventos', methods=['GET', 'POST'])
+@login_required
+def eventos():
+    if request.method == 'POST':
+        tipo, id_edicao = request.form.get('tipo_acao'), request.form.get('id_edicao')
+        if tipo in ['novo_evento', 'editar_evento']:
+            ev = Evento.query.get(id_edicao) if id_edicao else Evento()
+            if not id_edicao: db.session.add(ev)
+            ev.titulo, ev.descricao = request.form.get('titulo'), request.form.get('descricao')
+            ev.data_evento = datetime.strptime(request.form.get('data_evento'), '%Y-%m-%dT%H:%M')
+            ev.congregacao_id = request.form.get('congregacao_id') or None
+            ev.permite_inscricao = 'permite_inscricao' in request.form
+        elif tipo in ['nova_agenda', 'editar_agenda']:
+            dias = request.form.getlist('dia_semana')
+            if not dias: dias = ['0'] # Previne envio vazio
+            titulo = request.form.get('titulo')
+            horario = datetime.strptime(request.form.get('horario'), '%H:%M').time()
+            cong_id = request.form.get('congregacao_id') or None
+            
+            if id_edicao:
+                ag = Agenda.query.get(id_edicao)
+                if ag:
+                    ag.titulo, ag.horario, ag.congregacao_id, ag.dia_semana = titulo, horario, cong_id, int(dias[0])
+                    
+                for d in dias[1:]: 
+                    db.session.add(Agenda(titulo=titulo, dia_semana=int(d), horario=horario, congregacao_id=cong_id))
+            else:
+                for d in dias: 
+                    db.session.add(Agenda(titulo=titulo, dia_semana=int(d), horario=horario, congregacao_id=cong_id))
+        db.session.commit()
+        return redirect(url_for('main.eventos'))
+
+    c_events = []
+    for e in Evento.query.all():
+        if e.descricao == '[FIXO]': continue # Esconde o evento espelho no calendário para não duplicar visual
+        n_cong = e.congregação.nome if getattr(e, 'congregação', None) else 'Geral / Sede'
+        c_events.append({'id': e.id, 'title': e.titulo, 'start': e.data_evento.isoformat(), 'color': '#f97316', 'allDay': False, 'extendedProps': {'type': 'evento', 'desc': e.descricao, 'cong': n_cong}})
+    
+    for a in Agenda.query.all():
+        cong = Congregacao.query.get(a.congregacao_id) if getattr(a, 'congregacao_id', None) else None
+        c_events.append({'id': a.id, 'title': a.titulo, 'startTime': a.horario.strftime('%H:%M:%S'), 'daysOfWeek': [a.dia_semana + 1 if a.dia_semana < 6 else 0], 'color': '#10b981', 'allDay': False, 'extendedProps': {'type': 'agenda', 'cong': cong.nome if cong else 'Sede', 'tipo_f': getattr(a, 'tipo', '')}})
+
+    return render_template('main/eventos.html', events_json=c_events, congregacoes=Congregacao.query.all())
+
+# --- INSTANCIADOR DE CULTO FIXO ---
+@main_bp.route('/api/agenda/<int:id>/instanciar', methods=['POST'])
+@login_required
+def api_instanciar_agenda(id):
+    agenda = Agenda.query.get_or_404(id)
+    data_str = request.get_json().get('data')[:10] # Pega apenas YYYY-MM-DD
+    hora_str = agenda.horario.strftime('%H:%M:%S')
+    dt = datetime.strptime(f"{data_str} {hora_str}", '%Y-%m-%d %H:%M:%S')
+    
+    evento = Evento.query.filter_by(titulo=agenda.titulo, data_evento=dt).first()
+    if not evento:
+        evento = Evento(titulo=agenda.titulo, descricao="[FIXO]", data_evento=dt, congregacao_id=agenda.congregacao_id, permite_inscricao=True)
+        db.session.add(evento)
+        db.session.commit()
+    return jsonify({'evento_id': evento.id})
+
+# --- API GESTÃO E VÍNCULOS ---
+@main_bp.route('/api/evento/<int:id>/gestao', methods=['GET'])
+@login_required
+def api_evento_gestao(id):
+    ev = Evento.query.get_or_404(id)
+    membros_data = []
+    for m in Membro.query.filter_by(ativo=True).order_by(Membro.nome).all():
+        p = Presenca.query.filter_by(evento_id=id, membro_id=m.id).first()
+        membros_data.append({'id': m.id, 'nome': m.nome, 'foto': m.foto_path or '', 'inscrito': bool(p), 'presente': p.presente if p else False, 'obs': p.observacoes if p else ''})
+    return jsonify({'titulo': ev.titulo, 'membros': membros_data})
+
+@main_bp.route('/api/evento/<int:id>/salvar_lote', methods=['POST'])
+@login_required
+def api_evento_salvar_lote(id):
+    data = request.get_json()
+    inscricoes, presencas, obs_dict = data.get('inscricoes', {}), data.get('presencas', {}), data.get('obs', {})
+
+    for m_id_str, vai in inscricoes.items():
+        m_id = int(m_id_str)
+        p = Presenca.query.filter_by(evento_id=id, membro_id=m_id).first()
+        if vai:
+            if not p: p = Presenca(evento_id=id, membro_id=m_id); db.session.add(p)
+            if m_id_str in presencas:
+                p.presente = presencas[m_id_str]
+                if p.presente and not p.checkin_time: p.checkin_time = datetime.utcnow()
+                elif not p.presente: p.checkin_time = None
+            if m_id_str in obs_dict: p.observacoes = obs_dict[m_id_str]
+        else:
+            if p: db.session.delete(p)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@main_bp.route('/<tipo>/deletar/<int:id>', methods=['POST'])
+@login_required
+def del_item(tipo, id):
+    obj = Evento.query.get_or_404(id) if tipo == 'evento' else Agenda.query.get_or_404(id)
+    if tipo == 'evento': Presenca.query.filter_by(evento_id=id).delete()
+    db.session.delete(obj); db.session.commit()
+    return jsonify({'success': True})
+
+@main_bp.route('/evento/dados/<int:id>')
+def get_ev_dados(id):
+    e = Evento.query.get_or_404(id)
+    return jsonify({'titulo': e.titulo, 'descricao': '' if e.descricao == '[FIXO]' else e.descricao, 'data_evento': e.data_evento.strftime('%Y-%m-%dT%H:%M'), 'congregacao_id': e.congregacao_id, 'permite_inscricao': e.permite_inscricao})
+
+@main_bp.route('/agenda/dados/<int:id>')
+def get_ag_dados(id):
+    a = Agenda.query.get_or_404(id)
+    return jsonify({'titulo': a.titulo, 'dia_semana': a.dia_semana, 'horario': a.horario.strftime('%H:%M'), 'congregacao_id': getattr(a, 'congregacao_id', None), 'tipo': getattr(a, 'tipo', '')})
+
+@main_bp.route('/congregacoes', methods=['GET', 'POST'])
+@login_required
+def congregacoes():
+    if request.method == 'POST':
+        c_id = request.form.get('cong_id')
+        c = Congregacao.query.get(c_id) if c_id else Congregacao()
+        if not c_id: db.session.add(c)
+        c.nome, c.endereco = request.form.get('nome'), request.form.get('endereco')
+        db.session.commit(); return redirect(url_for('main.congregacoes'))
+    return render_template('main/congregacoes.html', congregacoes=db.session.query(Congregacao).all())
+
+@main_bp.route('/grupos', methods=['GET', 'POST'])
+@login_required
+def grupos():
+    if request.method == 'POST':
+        t, i = request.form.get('tipo_acao'), request.form.get('item_id')
+        if t == 'novo_ministerio':
+            m = Ministerio.query.get(i) if i else Ministerio()
+            if not i: db.session.add(m)
+            m.nome, m.descricao = request.form.get('nome'), request.form.get('descricao')
+        elif t == 'nova_funcao':
+            f = Funcao.query.get(i) if i else Funcao()
+            if not i: db.session.add(f)
+            f.nome = request.form.get('nome')
+        db.session.commit(); return redirect(url_for('main.grupos'))
+    return render_template('main/grupos.html', ministerios=Ministerio.query.all(), funcoes=Funcao.query.all())
+
+@main_bp.route('/membro/deletar/<int:id>')
+@login_required
+def deletar_membro(id): db.session.delete(Membro.query.get_or_404(id)); db.session.commit(); return redirect(url_for('main.membros_page'))
+@main_bp.route('/congregacao/deletar/<int:id>')
+@login_required
+def deletar_congregacao(id): db.session.delete(Congregacao.query.get_or_404(id)); db.session.commit(); return redirect(url_for('main.congregacoes'))
+@main_bp.route('/ministerio/deletar/<int:id>')
+@login_required
+def deletar_ministerio(id): db.session.delete(Ministerio.query.get_or_404(id)); db.session.commit(); return redirect(url_for('main.grupos'))
+@main_bp.route('/funcao/deletar/<int:id>')
+@login_required
+def deletar_funcao(id): db.session.delete(Funcao.query.get_or_404(id)); db.session.commit(); return redirect(url_for('main.grupos'))

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block page_title %}Congregações{% endblock %}
+{% block content %}
+<div style="margin-bottom: 25px;">
+    <button onclick="openModalCadastro()" class="btn-primary"><i class="fas fa-plus"></i> Nova Congregação</button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+    {% for cong in congregacoes %}
+    <div class="card card-cong" style="cursor: pointer; border-top: 4px solid var(--amarelo-dourado); transition: 0.3s;" 
+         data-id="{{ cong.id }}" 
+         data-nome="{{ cong.nome }}" 
+         data-endereco="{{ cong.endereco or '' }}"
+         data-membros='{{ cong.membros|map(attribute="nome")|list|tojson }}'>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="color: var(--azul-marinho);">{{ cong.nome }}</h3>
+            <i class="fas fa-external-link-alt" style="color: var(--cinza-borda);"></i>
+        </div>
+        <p style="font-size: 13px; color: var(--cinza-texto); margin-bottom: 15px;"><i class="fas fa-map-marker-alt"></i> {{ cong.endereco or 'Sem endereço' }}</p>
+        <div style="display: flex; align-items: center; gap: 10px; color: var(--azul-marinho); font-weight: bold;">
+            <i class="fas fa-users"></i> {{ cong.membros|length }} Membros
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- MODAL DE DETALHES (EXPANDIDO) -->
+<div id="modal-detalhes" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+    <div class="modal-content" style="background:white; width:90%; max-width:800px; max-height: 90vh; border-radius:15px; position:relative; overflow-y:auto;">
+        <div style="padding: 25px; border-bottom: 1px solid var(--cinza-borda); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 10;">
+            <div>
+                <h2 id="detalhe-nome" style="color: var(--azul-marinho);"></h2>
+                <p id="detalhe-endereco" style="font-size: 14px; color: var(--cinza-texto);"></p>
+            </div>
+            <button onclick="fecharDetalhes()" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+        </div>
+        
+        <div style="padding: 25px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="color: var(--azul-marinho);"><i class="fas fa-users"></i> Membros Vinculados</h4>
+                <button onclick="openVinculoRapido()" class="btn-primary" style="background: var(--verde-folha); font-size: 12px; padding: 5px 12px;">
+                    <i class="fas fa-user-plus"></i> Vincular Membro
+                </button>
+            </div>
+            <div id="lista-membros-detalhe" style="max-height: 200px; overflow-y: auto; background: var(--cinza-fundo); padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+            </div>
+
+            <h4 style="color: var(--azul-marinho); margin-bottom: 10px;"><i class="fas fa-map-marked-alt"></i> Localização Geográfica</h4>
+            <div id="map" style="height: 300px; border-radius: 12px; border: 2px solid var(--cinza-borda); background: #eee;"></div>
+        </div>
+
+        <div style="padding: 20px; background: var(--cinza-fundo); display: flex; justify-content: flex-end; gap: 15px; border-radius: 0 0 15px 15px;">
+            <button id="btn-editar-cong" class="btn-primary">Editar Dados</button>
+            <button id="btn-deletar-cong" class="btn-primary" style="background: var(--laranja-fogo);">Excluir</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL VÍNCULO RÁPIDO -->
+<div id="modal-vinculo" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000; align-items:center; justify-content:center;">
+    <div class="card" style="width:400px; position: relative;">
+        <button onclick="document.getElementById('modal-vinculo').style.display='none'" style="position: absolute; top: 10px; right: 10px; border: none; background: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-bottom:20px; color:var(--azul-marinho);">Vincular Membro</h3>
+        <div style="margin-bottom:15px;">
+            <label style="display:block; font-weight:700; font-size:13px; margin-bottom:5px;">Selecione o Membro</label>
+            <select id="select-membro" style="width:100%; padding:10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+                {% for m in membros_todos %}
+                    <option value="{{ m.id }}">{{ m.nome }} ({{ m.tipo }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button onclick="confirmarVinculo()" class="btn-primary" style="width:100%;">Confirmar Vínculo</button>
+    </div>
+</div>
+
+<!-- MODAL CADASTRO -->
+<div id="modal-cong" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center;">
+    <div class="card" style="max-width: 400px; padding: 25px; position: relative;">
+        <button onclick="document.getElementById('modal-cong').style.display='none'" style="position: absolute; top: 10px; right: 10px; border: none; background: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 id="modal-title" style="margin-bottom:20px; color:var(--azul-marinho);">Nova Congregação</h3>
+        <form method="POST">
+            <input type="hidden" name="cong_id" id="cong_id">
+            <div style="margin-bottom:15px;">
+                <label style="display:block; font-weight:700; font-size:13px; margin-bottom:5px;">Nome *</label>
+                <input type="text" name="nome" id="cong_nome" required style="width:100%; padding:10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="display:block; font-weight:700; font-size:13px; margin-bottom:5px;">Endereço Completo</label>
+                <input type="text" name="endereco" id="cong_endereco" placeholder="Rua, Número, Cidade" style="width:100%; padding:10px; border:1px solid var(--cinza-borda); border-radius:6px;">
+            </div>
+            <button type="submit" class="btn-primary" style="width:100%;">Salvar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+let map, marker;
+let currentCongId = null;
+
+document.querySelectorAll('.card-cong').forEach(card => {
+    card.addEventListener('click', function() {
+        const data = {
+            id: this.getAttribute('data-id'),
+            nome: this.getAttribute('data-nome'),
+            endereco: this.getAttribute('data-endereco'),
+            membros: JSON.parse(this.getAttribute('data-membros'))
+        };
+        openDetalhes(data);
+    });
+});
+
+function openDetalhes(cong) {
+    currentCongId = cong.id;
+    document.getElementById('detalhe-nome').innerText = cong.nome;
+    document.getElementById('detalhe-endereco').innerText = cong.endereco || 'Endereço não informado';
+    
+    const lista = document.getElementById('lista-membros-detalhe');
+    lista.innerHTML = cong.membros.length > 0 
+        ? cong.membros.map(m => `<div style="padding:8px 0; border-bottom:1px solid #ddd;"><i class="fas fa-user" style="color:var(--cinza-texto); margin-right:10px;"></i> ${m}</div>`).join('')
+        : '<p style="text-align:center; color:var(--cinza-texto);">Nenhum membro vinculado.</p>';
+
+    document.getElementById('btn-editar-cong').onclick = () => openModalCadastro(cong);
+    document.getElementById('btn-deletar-cong').onclick = () => {
+        if(confirm('Excluir esta congregação?')) window.location.href = `/congregacao/deletar/${cong.id}`;
+    };
+
+    document.getElementById('modal-detalhes').style.display = 'flex';
+    
+    setTimeout(() => {
+        if (!map) {
+            map = L.map('map').setView([-8.0476, -34.8770], 13);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri'
+            } ).addTo(map);
+        }
+        
+        if(marker) map.removeLayer(marker);
+
+        if(cong.endereco && cong.endereco !== 'Endereço não informado') {
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cong.endereco )}`)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.length > 0) {
+                        const lat = data[0].lat;
+                        const lon = data[0].lon;
+                        map.setView([lat, lon], 17);
+                        marker = L.marker([lat, lon]).addTo(map).bindPopup(`<b>${cong.nome}</b>`).openPopup();
+                    } else {
+                        map.setView([-8.0476, -34.8770], 13);
+                    }
+                });
+        } else {
+            map.setView([-8.0476, -34.8770], 13);
+        }
+    }, 300);
+}
+
+function fecharDetalhes() {
+    document.getElementById('modal-detalhes').style.display = 'none';
+}
+
+function openVinculoRapido() {
+    document.getElementById('modal-vinculo').style.display = 'flex';
+}
+
+function confirmarVinculo() {
+    const membroId = document.getElementById('select-membro').value;
+    fetch('/vincular_membro', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({membro_id: membroId, cong_id: currentCongId})
+    }).then(res => res.json()).then(data => {
+        if(data.success) {
+            location.reload();
+        } else {
+            alert('Erro ao vincular ou membro já vinculado.');
+        }
+    });
+}
+
+function openModalCadastro(data = null) {
+    fecharDetalhes();
+    const modal = document.getElementById('modal-cong');
+    if(data && data.id) {
+        document.getElementById('modal-title').innerText = "Editar Congregação";
+        document.getElementById('cong_id').value = data.id;
+        document.getElementById('cong_nome').value = data.nome;
+        document.getElementById('cong_endereco').value = data.endereco;
+    } else {
+        document.getElementById('modal-title').innerText = "Nova Congregação";
+        document.getElementById('cong_id').value = '';
+        document.getElementById('cong_nome').value = '';
+        document.getElementById('cong_endereco').value = '';
+    }
+    modal.style.display = 'flex';
+}
+</script>
+{% endblock %}

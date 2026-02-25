@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block page_title %}Grupos e Funções{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos Premium Padrão do Sistema */
+    .dashboard-header { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 24px; margin-top: -10px; flex-wrap: wrap; gap: 16px; }
+    
+    .table-container { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f0f4f8; }
+    .table-premium { width: 100%; border-collapse: collapse; text-align: left; }
+    .table-premium th { background: #f8fafc; padding: 16px; font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+    .table-premium td { padding: 16px; border-bottom: 1px solid #f0f4f8; color: #334155; font-size: 0.95rem; vertical-align: middle; }
+    .table-premium tr:hover { background: #f8fafc; }
+    .table-premium tr:last-child td { border-bottom: none; }
+    
+    .badge-vinc { font-size: 0.8rem; padding: 6px 10px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; margin: 2px; }
+    
+    .action-group { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: opacity 0.2s; }
+    .btn-icon:hover { opacity: 0.85; }
+
+    /* Modais Travados */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
+    .modal-content { background: #fff; border-radius: 16px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+    .modal-close { position: absolute; top: 16px; right: 16px; background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: 0.2s; }
+    .modal-close:hover { background: #e2e8f0; color: #0f172a; }
+
+    /* Grid Responsivo para a Página */
+    .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    @media(max-width: 992px) { .grid-layout { grid-template-columns: 1fr; } }
+</style>
+
+<div class="dashboard-header">
+    <button type="button" onclick="openModal('ministerio')" class="btn-primary" style="display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+        <i class="fas fa-users-cog"></i> Novo Ministério
+    </button>
+    <button type="button" onclick="openModal('funcao')" class="btn-primary" style="background: var(--verde-folha); display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+        <i class="fas fa-tag"></i> Nova Função
+    </button>
+</div>
+
+<div class="grid-layout">
+    <div>
+        <h3 style="margin-bottom: 16px; color: var(--azul-marinho); display: flex; align-items: center; gap: 8px; font-size: 1.25rem;">
+            <i class="fas fa-sitemap"></i> Ministérios / Grupos
+        </h3>
+        
+        <div class="table-container" style="overflow-x: auto;">
+            <table class="table-premium">
+                <thead>
+                    <tr>
+                        <th>Ministério</th>
+                        <th>Membros Ativos (Cargo e Local)</th>
+                        <th style="text-align: right;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if ministerios and ministerios|length > 0 %}
+                        {% for min in ministerios %}
+                        <tr>
+                            <td style="width: 35%;">
+                                <div style="font-weight: 700; color: var(--azul-marinho); font-size: 1.05rem;">{{ min.nome }}</div>
+                                <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">{{ min.descricao or 'Sem descrição' }}</div>
+                            </td>
+                            <td style="width: 50%;">
+                                {% if min.membros_vinculados and min.membros_vinculados|length > 0 %}
+                                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                        {% for vinculo in min.membros_vinculados %}
+                                        <div class="badge-vinc" title="Editar na ficha do membro">
+                                            <i class="fas fa-user" style="color: #94a3b8; font-size: 0.7rem;"></i> 
+                                            {{ vinculo.membro.nome.split(' ')[0] }} 
+                                            
+                                            <span style="color: var(--laranja-fogo); margin-left: 2px; font-weight: 700;">({{ vinculo.funcao.nome }})</span>
+                                            
+                                            <span style="color: #64748b; margin-left: 6px; padding-left: 6px; border-left: 1px solid #cbd5e1; font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                                                <i class="fas fa-church" style="font-size: 0.65rem;"></i>
+                                                {% if vinculo.membro.congregações %}
+                                                    {{ vinculo.membro.congregações|map(attribute='nome')|join(', ') }}
+                                                {% else %}
+                                                    Sede/Geral
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span style="color: #94a3b8; font-size: 0.85rem; font-style: italic;">Nenhum membro vinculado</span>
+                                {% endif %}
+                            </td>
+                            <td style="width: 15%;">
+                                <div class="action-group">
+                                    <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="openModal('ministerio', {id:'{{min.id}}', nome:'{{min.nome|escape}}', desc:'{{min.descricao|escape}}'})" title="Editar Ministério">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <a href="{{ url_for('main.deletar_ministerio', id=min.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar este ministério?')" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                <i class="fas fa-users-slash" style="font-size: 40px; margin-bottom: 12px; color: #cbd5e1; display: block;"></i>
+                                Nenhum ministério cadastrado.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <h3 style="margin-bottom: 16px; color: var(--azul-marinho); display: flex; align-items: center; gap: 8px; font-size: 1.25rem;">
+            <i class="fas fa-tags"></i> Cargos / Funções
+        </h3>
+
+        <div class="table-container" style="overflow-x: auto;">
+            <table class="table-premium">
+                <thead>
+                    <tr>
+                        <th>Nome da Função</th>
+                        <th style="text-align: right;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if funcoes and funcoes|length > 0 %}
+                        {% for func in funcoes %}
+                        <tr>
+                            <td>
+                                <strong style="color: #334155;">{{ func.nome }}</strong>
+                            </td>
+                            <td>
+                                <div class="action-group">
+                                    <button type="button" class="btn-icon" style="background: var(--azul-marinho);" onclick="openModal('funcao', {id:'{{func.id}}', nome:'{{func.nome|escape}}'})" title="Editar">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <a href="{{ url_for('main.deletar_funcao', id=func.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar esta função?')" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="2" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                <i class="fas fa-tag" style="font-size: 30px; margin-bottom: 12px; color: #cbd5e1; display: block;"></i>
+                                Nenhuma função.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="modal-geral" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px; padding: 24px;">
+        <button class="modal-close" onclick="closeModal('modal-geral')">&times;</button>
+        <h3 id="modal-title" style="margin-bottom:24px; color:var(--azul-marinho); border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;"></h3>
+        
+        <form method="POST">
+            <input type="hidden" name="tipo_acao" id="tipo_acao">
+            <input type="hidden" name="item_id" id="item_id">
+            
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color: #334155;">Nome *</label>
+                <input type="text" name="nome" id="modal_nome" required style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; outline: none;">
+            </div>
+            
+            <div id="div-desc" style="margin-bottom:24px; display:none;">
+                <label style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color: #334155;">Descrição do Ministério</label>
+                <input type="text" name="descricao" id="modal_desc" style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; outline: none;">
+            </div>
+            
+            <button type="submit" class="btn-primary" style="width:100%; padding: 12px; border-radius: 8px; font-size: 1rem;"><i class="fas fa-save"></i> Salvar Dados</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function openModal(tipo, data = null) {
+    document.getElementById('tipo_acao').value = tipo === 'ministerio' ? 'novo_ministerio' : 'nova_funcao';
+    document.getElementById('modal-title').innerHTML = data ? `<i class="fas fa-edit"></i> Editar ${tipo === 'ministerio' ? 'Ministério' : 'Função'}` : `<i class="fas fa-plus"></i> Novo ${tipo === 'ministerio' ? 'Ministério' : 'Função'}`;
+    
+    document.getElementById('item_id').value = data ? data.id : '';
+    document.getElementById('modal_nome').value = data ? data.nome : '';
+    
+    if(tipo === 'ministerio') {
+        document.getElementById('div-desc').style.display = 'block';
+        document.getElementById('modal_desc').value = data ? data.desc : '';
+    } else {
+        document.getElementById('div-desc').style.display = 'none';
+    }
+    
+    document.getElementById('modal-geral').style.display = 'flex';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,224 @@
+from datetime import datetime
+from flask import render_template, request, redirect, url_for, jsonify
+from flask_login import login_required
+
+from app.models import db
+from app.models.igreja import (
+    Membro, Congregacao,
+    Evento, Agenda, Presenca
+)
+
+from . import eventos_bp
+
+
+# --- EVENTOS E AGENDA ---
+@eventos_bp.route('/eventos', methods=['GET', 'POST'])
+@login_required
+def eventos():
+    if request.method == 'POST':
+        tipo = request.form.get('tipo_acao')
+        id_edicao = request.form.get('id_edicao')
+
+        if tipo in ['novo_evento', 'editar_evento']:
+            ev = Evento.query.get(id_edicao) if id_edicao else Evento()
+            if not id_edicao:
+                db.session.add(ev)
+
+            ev.titulo = request.form.get('titulo')
+            ev.descricao = request.form.get('descricao')
+            ev.data_evento = datetime.strptime(request.form.get('data_evento'), '%Y-%m-%dT%H:%M')
+            ev.congregacao_id = request.form.get('congregacao_id') or None
+            ev.permite_inscricao = 'permite_inscricao' in request.form
+
+        elif tipo in ['nova_agenda', 'editar_agenda']:
+            dias = request.form.getlist('dia_semana')
+            if not dias:
+                dias = ['0']  # previne envio vazio
+
+            titulo = request.form.get('titulo')
+            horario = datetime.strptime(request.form.get('horario'), '%H:%M').time()
+            cong_id = request.form.get('congregacao_id') or None
+
+            if id_edicao:
+                ag = Agenda.query.get(id_edicao)
+                if ag:
+                    ag.titulo = titulo
+                    ag.horario = horario
+                    ag.congregacao_id = cong_id
+                    ag.dia_semana = int(dias[0])
+
+                for d in dias[1:]:
+                    db.session.add(Agenda(
+                        titulo=titulo,
+                        dia_semana=int(d),
+                        horario=horario,
+                        congregacao_id=cong_id
+                    ))
+            else:
+                for d in dias:
+                    db.session.add(Agenda(
+                        titulo=titulo,
+                        dia_semana=int(d),
+                        horario=horario,
+                        congregacao_id=cong_id
+                    ))
+
+        db.session.commit()
+        return redirect(url_for('eventos.eventos'))
+
+    c_events = []
+
+    for e in Evento.query.all():
+        if e.descricao == '[FIXO]':
+            continue  # evita duplicar no calendário
+        n_cong = e.congregação.nome if getattr(e, 'congregação', None) else 'Geral / Sede'
+        c_events.append({
+            'id': e.id,
+            'title': e.titulo,
+            'start': e.data_evento.isoformat(),
+            'color': '#f97316',
+            'allDay': False,
+            'extendedProps': {
+                'type': 'evento',
+                'desc': e.descricao,
+                'cong': n_cong
+            }
+        })
+
+    for a in Agenda.query.all():
+        cong = Congregacao.query.get(a.congregacao_id) if getattr(a, 'congregacao_id', None) else None
+        c_events.append({
+            'id': a.id,
+            'title': a.titulo,
+            'startTime': a.horario.strftime('%H:%M:%S'),
+            'daysOfWeek': [a.dia_semana + 1 if a.dia_semana < 6 else 0],
+            'color': '#10b981',
+            'allDay': False,
+            'extendedProps': {
+                'type': 'agenda',
+                'cong': cong.nome if cong else 'Sede',
+                'tipo_f': getattr(a, 'tipo', '')
+            }
+        })
+
+    return render_template(
+        'main/eventos.html',
+        events_json=c_events,
+        congregacoes=Congregacao.query.all()
+    )
+
+
+# --- INSTANCIADOR DE CULTO FIXO ---
+@eventos_bp.route('/api/agenda/<int:id>/instanciar', methods=['POST'])
+@login_required
+def api_instanciar_agenda(id):
+    agenda = Agenda.query.get_or_404(id)
+    data_str = request.get_json().get('data')[:10]  # YYYY-MM-DD
+    hora_str = agenda.horario.strftime('%H:%M:%S')
+    dt = datetime.strptime(f"{data_str} {hora_str}", '%Y-%m-%d %H:%M:%S')
+
+    evento = Evento.query.filter_by(titulo=agenda.titulo, data_evento=dt).first()
+    if not evento:
+        evento = Evento(
+            titulo=agenda.titulo,
+            descricao="[FIXO]",
+            data_evento=dt,
+            congregacao_id=agenda.congregacao_id,
+            permite_inscricao=True
+        )
+        db.session.add(evento)
+        db.session.commit()
+
+    return jsonify({'evento_id': evento.id})
+
+
+# --- API GESTÃO E VÍNCULOS ---
+@eventos_bp.route('/api/evento/<int:id>/gestao', methods=['GET'])
+@login_required
+def api_evento_gestao(id):
+    ev = Evento.query.get_or_404(id)
+    membros_data = []
+
+    for m in Membro.query.filter_by(ativo=True).order_by(Membro.nome).all():
+        p = Presenca.query.filter_by(evento_id=id, membro_id=m.id).first()
+        membros_data.append({
+            'id': m.id,
+            'nome': m.nome,
+            'foto': m.foto_path or '',
+            'inscrito': bool(p),
+            'presente': p.presente if p else False,
+            'obs': p.observacoes if p else ''
+        })
+
+    return jsonify({'titulo': ev.titulo, 'membros': membros_data})
+
+
+@eventos_bp.route('/api/evento/<int:id>/salvar_lote', methods=['POST'])
+@login_required
+def api_evento_salvar_lote(id):
+    data = request.get_json()
+    inscricoes = data.get('inscricoes', {})
+    presencas = data.get('presencas', {})
+    obs_dict = data.get('obs', {})
+
+    for m_id_str, vai in inscricoes.items():
+        m_id = int(m_id_str)
+        p = Presenca.query.filter_by(evento_id=id, membro_id=m_id).first()
+
+        if vai:
+            if not p:
+                p = Presenca(evento_id=id, membro_id=m_id)
+                db.session.add(p)
+
+            if m_id_str in presencas:
+                p.presente = presencas[m_id_str]
+                if p.presente and not p.checkin_time:
+                    p.checkin_time = datetime.utcnow()
+                elif not p.presente:
+                    p.checkin_time = None
+
+            if m_id_str in obs_dict:
+                p.observacoes = obs_dict[m_id_str]
+        else:
+            if p:
+                db.session.delete(p)
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@eventos_bp.route('/<tipo>/deletar/<int:id>', methods=['POST'])
+@login_required
+def del_item(tipo, id):
+    obj = Evento.query.get_or_404(id) if tipo == 'evento' else Agenda.query.get_or_404(id)
+    if tipo == 'evento':
+        Presenca.query.filter_by(evento_id=id).delete()
+    db.session.delete(obj)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@eventos_bp.route('/evento/dados/<int:id>')
+@login_required
+def get_ev_dados(id):
+    e = Evento.query.get_or_404(id)
+    return jsonify({
+        'titulo': e.titulo,
+        'descricao': '' if e.descricao == '[FIXO]' else e.descricao,
+        'data_evento': e.data_evento.strftime('%Y-%m-%dT%H:%M'),
+        'congregacao_id': e.congregacao_id,
+        'permite_inscricao': e.permite_inscricao
+    })
+
+
+@eventos_bp.route('/agenda/dados/<int:id>')
+@login_required
+def get_ag_dados(id):
+    a = Agenda.query.get_or_404(id)
+    return jsonify({
+        'titulo': a.titulo,
+        'dia_semana': a.dia_semana,
+        'horario': a.horario.strftime('%H:%M'),
+        'congregacao_id': getattr(a, 'congregacao_id', None),
+        'tipo': getattr(a, 'tipo', '')
+    })

@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+{% block page_title %}Gestão de Membros{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos Premium para a página de Membros */
+    .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    
+    /* Tabela Premium */
+    .table-container { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f0f4f8; }
+    .table-premium { width: 100%; border-collapse: collapse; text-align: left; }
+    .table-premium th { background: #f8fafc; padding: 16px; font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+    .table-premium td { padding: 16px; border-bottom: 1px solid #f0f4f8; color: #334155; font-size: 0.95rem; vertical-align: middle; }
+    .table-premium tr:hover { background: #f8fafc; }
+    .table-premium tr:last-child td { border-bottom: none; }
+
+    /* Avatares */
+    .avatar-wrapper { display: flex; align-items: center; gap: 12px; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; }
+    .avatar-placeholder { width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 2px solid #cbd5e1; }
+    .avatar-large { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: -60px auto 16px; display: block; background: #eee; }
+    
+    /* Badges e Botões */
+    .badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; font-weight: 700; display: inline-block; }
+    .badge-adulto { background: #dbeafe; color: #1e40af; }
+    .badge-crianca { background: #dcfce7; color: #166534; }
+    .badge-visitante { background: #fef3c7; color: #92400e; }
+    .badge-cong { font-size: 0.7rem; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin: 2px; display: inline-block; }
+    
+    .action-group { display: flex; gap: 8px; }
+    .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: opacity 0.2s; }
+    .btn-icon:hover { opacity: 0.85; }
+
+    /* Modais */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
+    .modal-content { background: #fff; border-radius: 16px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+    .modal-close { position: absolute; top: 16px; right: 16px; background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; }
+    
+    /* Detalhes do Membro */
+    .detalhe-header { background: linear-gradient(135deg, var(--azul-marinho) 0%, #1e40af 100%); height: 100px; border-radius: 16px 16px 0 0; }
+    .detalhe-body { padding: 0 32px 32px; text-align: center; }
+    .detalhe-nome { font-size: 1.5rem; color: var(--azul-marinho); font-weight: 800; margin: 0 0 4px; }
+    .detalhe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; margin-top: 24px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .detalhe-label { font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+    .detalhe-value { font-size: 0.95rem; color: #334155; font-weight: 500; }
+</style>
+
+<div class="dashboard-header" style="justify-content: flex-end; margin-bottom: 24px; margin-top: -10px;">
+    <button type="button" onclick="openModal('modal-form')" class="btn-primary" style="display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+        <i class="fas fa-user-plus"></i> Adicionar Membro
+    </button>
+</div>
+
+<div class="table-container" style="overflow-x: auto;">
+    <table class="table-premium">
+        <thead>
+            <tr>
+                <th>Membro</th>
+                <th>Tipo</th>
+                <th>Congregações</th>
+                <th>Ministérios</th>
+                <th style="text-align: right;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if membros and membros|length > 0 %}
+                {% for m in membros %}
+                <tr>
+                    <td>
+                        <div class="avatar-wrapper">
+                            {% if m.foto_path %}
+                                <img src="{{ url_for('static', filename=m.foto_path) }}" class="avatar" alt="Foto de {{ m.nome }}">
+                            {% else %}
+                                <div class="avatar-placeholder"><i class="fas fa-user"></i></div>
+                            {% endif %}
+                            <div>
+                                <div style="font-weight: 700;">{{ m.nome }}</div>
+                                {% if m.responsaveis %}
+                                <div style="font-size: 0.75rem; color: #64748b;"><i class="fas fa-shield-alt"></i> {{ m.responsaveis }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge 
+                            {% if m.tipo == 'Adulto' %}badge-adulto
+                            {% elif m.tipo == 'Criança' %}badge-crianca
+                            {% else %}badge-visitante{% endif %}">
+                            {{ m.tipo }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if m.congregações %}
+                            {% for c in m.congregações %}<span class="badge-cong">{{ c.nome }}</span>{% endfor %}
+                        {% else %}
+                            <span style="color: #94a3b8; font-size: 0.85rem; font-style: italic;">Nenhuma</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if m.vinculos_ministerio %}
+                            {% for vinculo in m.vinculos_ministerio %}
+                            <div style="font-size: 0.85rem; margin-bottom: 2px;">
+                                <strong>{{ vinculo.ministerio.nome }}</strong> <span style="color: #64748b;">({{ vinculo.funcao.nome }})</span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <span style="color: #94a3b8; font-size: 0.85rem; font-style: italic;">Nenhum</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-group" style="justify-content: flex-end;">
+                            <button type="button" class="btn-icon" style="background: #0ea5e9;" onclick="verDetalhes({{ m.id }})" title="Ver Detalhes">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="prepararEdicao({{ m.id }})" title="Editar">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                            <a href="{{ url_for('main.deletar_membro', id=m.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar este membro?')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">
+                        <i class="fas fa-users" style="font-size: 40px; margin-bottom: 12px; color: #cbd5e1; display: block;"></i>
+                        Nenhum membro cadastrado ainda.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<div id="modal-form" class="modal-overlay" >
+    <div class="modal-content" style="max-width: 700px; padding: 24px;">
+        <button class="modal-close" onclick="closeModal('modal-form')">&times;</button>
+        <h3 id="form-title" style="color: var(--azul-marinho); margin-bottom: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">Novo Membro</h3>
+        
+        <form method="POST" id="membro-form" enctype="multipart/form-data">
+            <input type="hidden" name="membro_id" id="membro_id">
+
+            <div style="text-align: center; margin-bottom: 24px;">
+                <label for="foto" style="cursor: pointer; display: inline-block;">
+                    <div style="width: 100px; height: 100px; background: #f8fafc; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px dashed #cbd5e1; margin: 0 auto; transition: 0.2s;">
+                        <i class="fas fa-camera" style="font-size: 24px; color: #94a3b8;"></i>
+                    </div>
+                    <span style="font-size: 12px; color: var(--azul-marinho); display: block; margin-top: 8px; font-weight: 600;">Adicionar/Alterar Foto</span>
+                </label>
+                <input type="file" name="foto" id="foto" accept="image/*" style="display: none;">
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Nome Completo *</label>
+                    <input type="text" name="nome" id="nome" required style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                </div>
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Data de Nascimento *</label>
+                    <input type="date" name="data_nascimento" id="data_nascimento" required style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Tipo de Cadastro</label>
+                    <select name="tipo_membro" id="tipo_membro" onchange="toggleCamposCrianca()" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                        <option value="Adulto">Adulto</option>
+                        <option value="Criança">Criança</option>
+                        <option value="Visitante">Visitante</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Data de Batismo</label>
+                    <input type="date" name="data_batismo" id="data_batismo" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                </div>
+            </div>
+
+            <div id="campos-crianca" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <h4 style="color: #166534; margin: 0 0 12px; font-size: 14px;"><i class="fas fa-child"></i> Ficha Infantil</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div>
+                        <label style="display: block; font-weight: 700; font-size: 12px; margin-bottom: 6px; color: #166534;">Responsáveis (Pais)</label>
+                        <input type="text" name="responsaveis" id="responsaveis" style="width: 100%; padding: 8px 12px; border: 1px solid #bbf7d0; border-radius: 6px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-weight: 700; font-size: 12px; margin-bottom: 6px; color: #166534;">Alergias / Info Médica</label>
+                        <input type="text" name="info_medica" id="info_medica" style="width: 100%; padding: 8px 12px; border: 1px solid #bbf7d0; border-radius: 6px; outline: none;">
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <h4 style="color: #334155; margin: 0 0 12px; font-size: 14px;"><i class="fas fa-church"></i> Atribuições Iniciais</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+                    <div>
+                        <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Ministério</label>
+                        <select name="ministerio_id" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                            <option value="">Nenhum</option>
+                            {% for min in ministerios %}<option value="{{ min.id }}">{{ min.nome }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Função</label>
+                        <select name="funcao_id" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                            <option value="">Nenhuma</option>
+                            {% for func in funcoes %}<option value="{{ func.id }}">{{ func.nome }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-weight: 700; font-size: 12px; margin-bottom: 6px; color: #334155;">Congregações (Segure CTRL para +1)</label>
+                        <select name="congregacoes[]" id="congregacoes" multiple style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; height: 85px;">
+                            {% for cong in congregacoes %}
+                            <option value="{{ cong.id }}">{{ cong.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Observações Internas</label>
+                <textarea name="observacoes" id="observacoes" rows="2" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; resize: vertical;"></textarea>
+            </div>
+
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px;">
+                <i class="fas fa-save"></i> Salvar Cadastro
+            </button>
+        </form>
+    </div>
+</div>
+
+<div id="modal-detalhes" class="modal-overlay" >
+    <div class="modal-content" style="max-width: 500px;">
+        <button class="modal-close" style="background: rgba(255,255,255,0.3); color: white;" onclick="closeModal('modal-detalhes')">&times;</button>
+        
+        <div class="detalhe-header"></div>
+        <div class="detalhe-body">
+            <img id="view-foto" src="" class="avatar-large" alt="Foto do Membro">
+            <h2 class="detalhe-nome" id="view-nome">Nome do Membro</h2>
+            <span class="badge" id="view-tipo" style="background: #e2e8f0; color: #475569;">Tipo</span>
+            
+            <div class="detalhe-grid">
+                <div>
+                    <div class="detalhe-label">Nascimento</div>
+                    <div class="detalhe-value" id="view-nasc">-</div>
+                </div>
+                <div>
+                    <div class="detalhe-label">Batismo</div>
+                    <div class="detalhe-value" id="view-batismo">-</div>
+                </div>
+                
+                <div id="view-box-resp" style="display:none; grid-column: 1 / -1;">
+                    <div class="detalhe-label" style="color: #166534;">Responsáveis</div>
+                    <div class="detalhe-value" id="view-resp">-</div>
+                </div>
+                <div id="view-box-medico" style="display:none; grid-column: 1 / -1;">
+                    <div class="detalhe-label" style="color: #b91c1c;">Alergias / Info Médica</div>
+                    <div class="detalhe-value" id="view-medico">-</div>
+                </div>
+
+                <div style="grid-column: 1 / -1;">
+                    <div class="detalhe-label">Observações</div>
+                    <div class="detalhe-value" id="view-obs" style="font-size: 0.85rem; color: #64748b; font-style: italic;">Nenhuma observação.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const membrosData = {{ membros_json | tojson | safe }};
+
+function openModal(modalId) {
+    if(modalId === 'modal-form') {
+        document.getElementById('membro-form').reset();
+        document.getElementById('membro_id').value = '';
+        document.getElementById('form-title').innerText = 'Novo Membro';
+        
+        // Limpa as congregações no novo membro
+        Array.from(document.getElementById('congregacoes').options).forEach(opt => opt.selected = false);
+        
+        toggleCamposCrianca();
+    }
+    document.getElementById(modalId).style.display = 'flex';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function closeModalIfOverlay(e, modalId) {
+    if (e.target.id === modalId) closeModal(modalId);
+}
+
+function toggleCamposCrianca() {
+    const tipo = document.getElementById('tipo_membro').value;
+    const divCrianca = document.getElementById('campos-crianca');
+    if (divCrianca) {
+        divCrianca.style.display = (tipo === 'Criança') ? 'block' : 'none';
+    }
+}
+
+function prepararEdicao(id) {
+    const m = membrosData.find(item => item.id === id);
+    if (!m) return;
+
+    document.getElementById('form-title').innerText = 'Editar Membro';
+    document.getElementById('membro_id').value = m.id;
+    document.getElementById('nome').value = m.nome;
+    document.getElementById('data_nascimento').value = m.data_nascimento;
+    document.getElementById('data_batismo').value = m.data_batismo || '';
+    document.getElementById('tipo_membro').value = m.tipo;
+    document.getElementById('responsaveis').value = m.responsaveis || '';
+    document.getElementById('info_medica').value = m.info_medica || '';
+    document.getElementById('observacoes').value = m.observacoes || '';
+
+    // Marcando o Select Múltiplo
+    const selectCong = document.getElementById('congregacoes');
+    Array.from(selectCong.options).forEach(opt => opt.selected = false);
+    
+    if (m.congregações) {
+        const congIds = m.congregações.map(c => c.id.toString());
+        Array.from(selectCong.options).forEach(opt => {
+            if (congIds.includes(opt.value)) opt.selected = true;
+        });
+    }
+
+    toggleCamposCrianca();
+    document.getElementById('modal-form').style.display = 'flex';
+}
+
+function verDetalhes(id) {
+    const m = membrosData.find(item => item.id === id);
+    if (!m) return;
+
+    const fotoEl = document.getElementById('view-foto');
+    if (m.foto_path) {
+        fotoEl.src = "/static/" + m.foto_path;
+        fotoEl.style.display = "block";
+    } else {
+        fotoEl.src = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23cbd5e1'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
+    }
+
+    document.getElementById('view-nome').innerText = m.nome;
+    document.getElementById('view-tipo').innerText = m.tipo;
+    document.getElementById('view-nasc').innerText = m.data_nascimento ? m.data_nascimento.split('-').reverse().join('/') : '-';
+    document.getElementById('view-batismo').innerText = m.data_batismo ? m.data_batismo.split('-').reverse().join('/') : '-';
+    document.getElementById('view-obs').innerText = m.observacoes || 'Nenhuma observação informada.';
+
+    const boxResp = document.getElementById('view-box-resp');
+    const boxMed = document.getElementById('view-box-medico');
+    if (m.tipo === 'Criança') {
+        boxResp.style.display = 'block';
+        boxMed.style.display = 'block';
+        document.getElementById('view-resp').innerText = m.responsaveis || 'Não informado';
+        document.getElementById('view-medico').innerText = m.info_medica || 'Nenhuma';
+    } else {
+        boxResp.style.display = 'none';
+        boxMed.style.display = 'none';
+    }
+
+    document.getElementById('modal-detalhes').style.display = 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCamposCrianca();
+});
+</script>
+{% endblock %}

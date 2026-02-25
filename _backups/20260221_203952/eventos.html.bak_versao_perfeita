@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block page_title %}Agenda e Gestão de Eventos{% endblock %}
+
+{% block content %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    .calendar-container { background: #fff; border-radius: 20px; padding: 20px; border: 1px solid #e2e8f0; }
+    .fc { font-family: inherit; --fc-border-color: #f1f5f9; --fc-today-bg-color: #f8fafc; }
+    .fc-event { cursor: pointer; border: none !important; border-radius: 6px !important; padding: 4px 8px !important; font-size: 0.75rem !important; font-weight: 700 !important; }
+    .fc .fc-toolbar-title { font-weight: 800; color: var(--azul-marinho); text-transform: capitalize; }
+    
+    .fc-daygrid-event-harness { margin-bottom: 2px; }
+    
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    .modal-content { background: #fff; border-radius: 20px; width: 95%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 0; position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); }
+    
+    /* Abas do Modal */
+    .modal-tabs { display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 20px 20px 0 0; }
+    .tab-btn { flex: 1; padding: 15px 5px; border: none; background: none; font-weight: 700; font-size: 0.85rem; color: #64748b; cursor: pointer; transition: 0.2s; }
+    .tab-btn.active { color: var(--azul-marinho); border-bottom: 3px solid var(--azul-marinho); background: #fff; }
+    
+    /* Lista de Membros */
+    .member-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; }
+    .member-item:hover { background: #f8fafc; }
+    .member-info { display: flex; align-items: center; gap: 12px; }
+    .member-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 1px solid #cbd5e1; }
+    
+    /* Seletores V / X */
+    .toggle-group { display: flex; background: #f1f5f9; border-radius: 8px; padding: 2px; border: 1px solid #e2e8f0; }
+    .toggle-btn { width: 36px; height: 32px; border: none; background: transparent; border-radius: 6px; font-size: 14px; cursor: pointer; color: #94a3b8; transition: 0.2s; font-weight: 800; }
+    .toggle-btn.yes.active { background: #10b981; color: white; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3); }
+    .toggle-btn.no.active { background: #ef4444; color: white; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3); }
+
+    .chart-container { width: 100%; max-width: 300px; margin: 0 auto 20px; }
+    
+    .legend { display: flex; gap: 15px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.85rem; font-weight: 700; color: #64748b; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .fc-day-other { visibility: hidden; }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background: #f97316;"></div> Evento Único</div>
+        <div class="legend-item"><div class="dot" style="background: #10b981;"></div> Evento Fixo (Cultos)</div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <button onclick="openModalForm('evento')" class="btn-primary"><i class="fas fa-plus"></i> Novo Evento</button>
+        <button onclick="openModalForm('agenda')" class="btn-primary" style="background: var(--verde-folha);"><i class="fas fa-clock"></i> Novo Fixo</button>
+    </div>
+</div>
+
+<div class="calendar-container">
+    <div id='calendar'></div>
+</div>
+
+<div id="modal-gestao" class="modal-overlay">
+    <div class="modal-content">
+        <button onclick="closeModal('modal-gestao')" style="position:absolute; top:12px; right:12px; border:none; background:#f1f5f9; width:30px; height:30px; border-radius:50%; z-index:100; cursor:pointer; color: #64748b;">&times;</button>
+        
+        <div class="modal-tabs">
+            <button class="tab-btn active" onclick="switchTab('tab-inscricao')"><i class="fas fa-list"></i> 1. Lista Geral</button>
+            <button class="tab-btn" onclick="switchTab('tab-presenca')"><i class="fas fa-user-check"></i> 2. Chamada</button>
+            <button class="tab-btn" onclick="switchTab('tab-grafico'); drawChart();"><i class="fas fa-chart-pie"></i> 3. Relatório</button>
+        </div>
+
+        <div id="tab-inscricao" class="tab-content">
+            <div style="padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                <p style="font-size: 0.8rem; color: #64748b; margin: 0 0 10px;">Indique <b>SIM (V)</b> para quem vai participar e <b>NÃO (X)</b> para remover da lista do evento.</p>
+                <input type="text" id="search-membro" placeholder="Buscar nome..." onkeyup="filterList('lista-inscricao', this.value)" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; outline:none;">
+            </div>
+            <div id="lista-inscricao" style="max-height: 350px; overflow-y:auto; padding-bottom: 10px;"></div>
+        </div>
+
+        <div id="tab-presenca" class="tab-content" style="display:none;">
+            <div style="padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                <p style="font-size: 0.8rem; color: #64748b; margin: 0;">Apenas membros que receberam <b>SIM</b> na aba anterior aparecem aqui. Indique quem compareceu.</p>
+            </div>
+            <div id="lista-presenca" style="max-height: 400px; overflow-y:auto; padding-bottom: 10px;"></div>
+        </div>
+
+        <div id="tab-grafico" class="tab-content" style="display:none; padding: 30px 20px; text-align: center;">
+            <div class="chart-container">
+                <canvas id="presencaChart"></canvas>
+            </div>
+            <div id="chart-stats" style="display: flex; justify-content: space-around; font-weight: 700; color: #334155; margin-top: 20px;"></div>
+        </div>
+
+        <div style="padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 0 0 20px 20px;">
+            <div style="display: flex; gap: 8px;">
+                <button id="btn-edit-gestao" class="btn-primary" style="background: #e2e8f0; color: #475569; padding: 10px 15px;" title="Editar Info do Evento"><i class="fas fa-pen"></i></button>
+                <button id="btn-del-gestao" class="btn-primary" style="background: #fee2e2; color: #ef4444; padding: 10px 15px;" title="Excluir Evento"><i class="fas fa-trash"></i></button>
+            </div>
+            <button onclick="salvarGestaoLote()" class="btn-primary" style="padding: 12px 25px; font-size: 1rem;"><i class="fas fa-save"></i> Salvar Inscrições/Presenças</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-form" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px; padding: 25px;">
+        <button onclick="closeModal('modal-form')" style="position:absolute; top:15px; right:15px; border:none; background:none; font-size:20px;">&times;</button>
+        <h3 id="form-title" style="margin-bottom:20px; color:var(--azul-marinho);"></h3>
+        <form method="POST">
+            <input type="hidden" name="tipo_acao" id="tipo_acao">
+            <input type="hidden" name="id_edicao" id="id_edicao">
+            
+            <label style="display:block; font-size:12px; font-weight:700; margin-bottom:5px;">Título</label>
+            <input type="text" name="titulo" id="titulo" required style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:15px;">
+
+            <div id="box-evento">
+                <label style="display:block; font-size:12px; font-weight:700; margin-bottom:5px;">Data e Hora</label>
+                <input type="datetime-local" name="data_evento" id="data_evento" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:15px;">
+                <textarea name="descricao" id="descricao" placeholder="Descrição..." style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:15px;"></textarea>
+            </div>
+
+            <div id="box-agenda" style="display:none;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; margin-bottom:5px;">Dia Semana</label>
+                        <select name="dia_semana" id="dia_semana" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                            <option value="0">Segunda</option><option value="1">Terça</option><option value="2">Quarta</option>
+                            <option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sábado</option><option value="6">Domingo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; margin-bottom:5px;">Horário</label>
+                        <input type="time" name="horario" id="horario" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                    </div>
+                </div>
+            </div>
+
+            <label style="display:block; font-size:12px; font-weight:700; margin-bottom:5px;">Congregação / Local</label>
+            <select name="congregacao_id" id="congregacao_id" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:20px;">
+                <option value="">Geral / Sede</option>
+                {% for c in congregacoes %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+            </select>
+
+            <button type="submit" class="btn-primary" style="width:100%; padding:12px;">Salvar Registro</button>
+        </form>
+    </div>
+</div>
+
+<script>
+let currentEventId = null;
+let stateData = { inscricoes: {}, presencas: {}, obs: {}, membrosInfo: {} };
+let myChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'pt-br',
+        height: 'auto',
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
+        buttonText: { today: 'Mês Atual' },
+        fixedWeekCount: false,
+        showNonCurrentDates: false,
+        events: {{ events_json | tojson | safe }},
+        eventClick: function(info) { 
+            const type = info.event.extendedProps.type;
+            if(type === 'evento') {
+                currentEventId = info.event.id;
+                openGestaoSPA();
+            } else {
+                alert("Para editar ou excluir eventos fixos, modifique o backend ou crie rotinas separadas. Use eventos únicos para chamadas!");
+            }
+        }
+    });
+    calendar.render();
+});
+
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function openModalForm(tipo, id = null) {
+    document.getElementById('tipo_acao').value = (tipo === 'evento') ? (id ? 'editar_evento' : 'novo_evento') : (id ? 'editar_agenda' : 'nova_agenda');
+    document.getElementById('id_edicao').value = id || '';
+    document.getElementById('form-title').innerText = id ? 'Editar Registro' : 'Novo Registro';
+    document.getElementById('box-evento').style.display = (tipo === 'evento') ? 'block' : 'none';
+    document.getElementById('box-agenda').style.display = (tipo === 'agenda') ? 'block' : 'none';
+    document.getElementById('modal-form').style.display = 'flex';
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).style.display = 'block';
+    event.currentTarget.classList.add('active');
+    
+    if(tabId === 'tab-presenca') renderizarChamada();
+}
+
+async function openGestaoSPA() {
+    switchTab('tab-inscricao'); // Reseta pra primeira aba
+    document.querySelectorAll('.tab-btn')[0].classList.add('active');
+
+    const resp = await fetch(`/api/evento/${currentEventId}/gestao`);
+    const data = await resp.json();
+    
+    // Configura Botões de Ação Perigosos
+    document.getElementById('btn-del-gestao').onclick = async () => {
+        if(confirm("Excluir este evento e TODAS as suas presenças permanentemente?")) {
+            await fetch(`/evento/deletar/${currentEventId}`, {method:'POST'});
+            location.reload();
+        }
+    };
+    document.getElementById('btn-edit-gestao').onclick = () => {
+        closeModal('modal-gestao');
+        fetch(`/evento/dados/${currentEventId}`).then(r => r.json()).then(d => {
+            document.getElementById('titulo').value = d.titulo;
+            document.getElementById('data_evento').value = d.data_evento;
+            document.getElementById('descricao').value = d.descricao;
+            document.getElementById('congregacao_id').value = d.congregacao_id || '';
+            openModalForm('evento', currentEventId);
+        });
+    };
+
+    // Alimenta o Estado Global
+    stateData = { inscricoes: {}, presencas: {}, obs: {}, membrosInfo: {} };
+    data.membros.forEach(m => {
+        stateData.membrosInfo[m.id] = m;
+        stateData.inscricoes[m.id] = m.inscrito;
+        stateData.presencas[m.id] = m.presente;
+        stateData.obs[m.id] = m.obs;
+    });
+
+    renderizarInscricoes();
+    document.getElementById('modal-gestao').style.display = 'flex';
+}
+
+function renderizarInscricoes() {
+    const div = document.getElementById('lista-inscricao');
+    div.innerHTML = Object.values(stateData.membrosInfo).map(m => `
+        <div class="member-item search-row" data-name="${m.nome.toLowerCase()}">
+            <div class="member-info">
+                <img src="/static/${m.foto || 'img/placeholder.png'}" class="member-img">
+                <span style="font-weight:700; font-size:13px; color:#334155;">${m.nome}</span>
+            </div>
+            <div class="toggle-group">
+                <button class="toggle-btn no ${stateData.inscricoes[m.id] === false ? 'active' : ''}" onclick="setVal(${m.id}, 'inscricoes', false)"><i class="fas fa-times"></i></button>
+                <button class="toggle-btn yes ${stateData.inscricoes[m.id] === true ? 'active' : ''}" onclick="setVal(${m.id}, 'inscricoes', true)"><i class="fas fa-check"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderizarChamada() {
+    const div = document.getElementById('lista-presenca');
+    const inscritos = Object.values(stateData.membrosInfo).filter(m => stateData.inscricoes[m.id] === true);
+    
+    if(inscritos.length === 0) {
+        div.innerHTML = '<div style="text-align:center; padding: 40px 20px; color: #94a3b8;"><i class="fas fa-clipboard" style="font-size:30px; margin-bottom:10px;"></i><br>Nenhum membro inscrito. Volte na aba 1 e marque V para quem vai participar.</div>';
+        return;
+    }
+
+    div.innerHTML = inscritos.map(m => `
+        <div class="member-item" style="flex-direction: column; align-items: stretch; gap: 10px;">
+            <div style="display:flex; justify-content: space-between; align-items: center;">
+                <div class="member-info">
+                    <img src="/static/${m.foto || 'img/placeholder.png'}" class="member-img">
+                    <span style="font-weight:700; font-size:13px; color:#334155;">${m.nome}</span>
+                </div>
+                <div class="toggle-group">
+                    <button class="toggle-btn no ${stateData.presencas[m.id] === false ? 'active' : ''}" onclick="setVal(${m.id}, 'presencas', false)"><i class="fas fa-times"></i></button>
+                    <button class="toggle-btn yes ${stateData.presencas[m.id] === true ? 'active' : ''}" onclick="setVal(${m.id}, 'presencas', true)"><i class="fas fa-check"></i></button>
+                </div>
+            </div>
+            <input type="text" placeholder="Adicionar observação (ex: chegou atrasado)..." value="${stateData.obs[m.id] || ''}" onchange="stateData.obs[${m.id}] = this.value" style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:#f8fafc; outline:none;">
+        </div>
+    `).join('');
+}
+
+function setVal(id, context, val) {
+    stateData[context][id] = val;
+    if(context === 'inscricoes') renderizarInscricoes();
+    if(context === 'presencas') renderizarChamada();
+}
+
+function filterList(divId, term) {
+    const rows = document.getElementById(divId).getElementsByClassName('search-row');
+    term = term.toLowerCase();
+    for (let r of rows) {
+        r.style.display = r.getAttribute('data-name').includes(term) ? 'flex' : 'none';
+    }
+}
+
+async function salvarGestaoLote() {
+    const btn = event.currentTarget;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    btn.disabled = true;
+
+    await fetch(`/api/evento/${currentEventId}/salvar_lote`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            inscricoes: stateData.inscricoes,
+            presencas: stateData.presencas,
+            obs: stateData.obs
+        })
+    });
+
+    btn.innerHTML = '<i class="fas fa-check"></i> Salvo com Sucesso!';
+    setTimeout(() => { 
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Inscrições/Presenças'; 
+        btn.disabled = false;
+    }, 2000);
+}
+
+// LÓGICA DO GRÁFICO (CHART.JS)
+function drawChart() {
+    const inscritos = Object.values(stateData.membrosInfo).filter(m => stateData.inscricoes[m.id] === true);
+    let presentes = 0;
+    let ausentes = 0;
+    let naoRespondido = 0;
+
+    inscritos.forEach(m => {
+        if(stateData.presencas[m.id] === true) presentes++;
+        else if(stateData.presencas[m.id] === false) ausentes++;
+        else naoRespondido++;
+    });
+
+    document.getElementById('chart-stats').innerHTML = `
+        <div><span style="font-size:24px; color:var(--azul-marinho);">${inscritos.length}</span><br><span style="font-size:10px; color:#64748b;">INSCRITOS</span></div>
+        <div><span style="font-size:24px; color:#10b981;">${presentes}</span><br><span style="font-size:10px; color:#64748b;">PRESENTES</span></div>
+        <div><span style="font-size:24px; color:#ef4444;">${ausentes}</span><br><span style="font-size:10px; color:#64748b;">FALTAS</span></div>
+    `;
+
+    const ctx = document.getElementById('presencaChart').getContext('2d');
+    if(myChart) myChart.destroy();
+
+    myChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Presentes', 'Faltas', 'Sem Resposta'],
+            datasets: [{
+                data: [presentes, ausentes, naoRespondido],
+                backgroundColor: ['#10b981', '#ef4444', '#e2e8f0'],
+                borderWidth: 0
+            }]
+        },
+        options: { responsive: true, cutout: '70%', plugins: { legend: { display: false } } }
+    });
+}
+</script>
+{% endblock %}

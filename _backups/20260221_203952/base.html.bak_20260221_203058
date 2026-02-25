@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Shekinah PE{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Merriweather:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS para Mapas -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --azul-marinho: #192A56;
+            --verde-folha: #27AE60;
+            --laranja-fogo: #E67E22;
+            --amarelo-dourado: #F1C40F;
+            --cinza-fundo: #f4f7f9;
+            --cinza-borda: #dfe4ea;
+            --cinza-texto: #7f8c8d;
+            --preto-texto: #333333;
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 70px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Lato', sans-serif; background: var(--cinza-fundo ); color: var(--preto-texto); display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar { width: var(--sidebar-width); background: var(--azul-marinho); color: white; transition: all 0.3s; position: fixed; height: 100vh; z-index: 1000; }
+        .sidebar.collapsed { width: var(--sidebar-collapsed-width); }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .logo-text { font-family: 'Merriweather', serif; font-weight: 700; font-size: 1.2rem; white-space: nowrap; overflow: hidden; }
+        .sidebar.collapsed .logo-text { display: none; }
+
+        .nav-menu { padding: 20px 0; }
+        .nav-item { padding: 12px 20px; display: flex; align-items: center; color: rgba(255,255,255,0.7); text-decoration: none; transition: 0.3s; border-left: 4px solid transparent; }
+        .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.1); color: white; border-left-color: var(--amarelo-dourado); }
+        .nav-item i { width: 30px; font-size: 1.2rem; }
+        .nav-item span { white-space: nowrap; overflow: hidden; }
+        .sidebar.collapsed .nav-item span { display: none; }
+
+        /* Main Content */
+        .main-content { flex: 1; margin-left: var(--sidebar-width); transition: all 0.3s; padding: 30px; }
+        .main-content.expanded { margin-left: var(--sidebar-collapsed-width); }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .btn-primary { background: var(--azul-marinho); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 700; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* Modal Moderno */
+        .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; backdrop-filter: blur(4px); }
+        .modal-content { background:white; width:90%; max-width:800px; max-height: 90vh; border-radius:15px; position:relative; overflow-y:auto; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Shekinah PE</span>
+            <button onclick="toggleSidebar()" style="background:none; border:none; color:white; cursor:pointer;"><i class="fas fa-bars"></i></button>
+        </div>
+        <nav class="nav-menu">
+            <a href="{{ url_for('membros.membros_page') }}" class="nav-item {{ 'active' if request.endpoint == 'main.dashboard' }}">
+                <i class="fas fa-user-plus"></i> <span>Cadastro</span>
+            </a>
+            <a href="{{ url_for('congregacoes.congregacoes') }}" class="nav-item {{ 'active' if request.endpoint == 'main.congregacoes' }}">
+                <i class="fas fa-church"></i> <span>Congregações</span>
+            <a href="{{ url_for("grupos.grupos") }}" class="nav-item {{ "active" if request.endpoint == "main.grupos" }}">
+                <i class="fas fa-users-cog"></i> <span>Grupos e Funções</span>
+            <a href="{{ url_for("main.eventos") }}" class="nav-item {{ "active" if request.endpoint == "main.eventos" }}">
+                <i class="fas fa-calendar-alt"></i> <span>Calendário e Eventos</span>
+            </a>
+            </a>
+            </a>
+            <a href="{{ url_for('auth.logout') }}" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i> <span>Sair</span>
+            </a>
+        </nav>
+    </div>
+
+    <div class="main-content" id="main-content">
+        <div class="top-bar">
+            <h2 style="font-family: 'Merriweather', serif; color: var(--azul-marinho);">{% block page_title %}{% endblock %}</h2>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-user-circle" style="font-size: 1.5rem; color: var(--azul-marinho);"></i>
+                <span style="font-weight: 700;">Administrador</span>
+            </div>
+        </div>
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        function toggleSidebar( ) {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('main-content').classList.toggle('expanded');
+        }
+    </script>
+</body>
+</html>

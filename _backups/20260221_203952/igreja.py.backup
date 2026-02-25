@@ -1,0 +1,79 @@
+from app.models import db
+from datetime import datetime
+
+# Tabela de ligação Membro <-> Congregação
+membro_congregacao = db.Table('membro_congregacao',
+    db.Column('membro_id', db.Integer, db.ForeignKey('membros.id'), primary_key=True),
+    db.Column('congregacao_id', db.Integer, db.ForeignKey('congregações.id'), primary_key=True)
+)
+
+class Congregacao(db.Model):
+    __tablename__ = 'congregações'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    endereco = db.Column(db.String(200))
+    ativa = db.Column(db.Boolean, default=True)
+    membros = db.relationship('Membro', secondary=membro_congregacao, backref='congregações')
+    eventos = db.relationship('Evento', backref='congregação', lazy=True)
+
+class Membro(db.Model):
+    __tablename__ = 'membros'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    data_nascimento = db.Column(db.Date)
+    tipo = db.Column(db.String(20), default='Adulto')
+    ativo = db.Column(db.Boolean, default=True)
+    observacoes = db.Column(db.Text)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    inscricoes = db.relationship('Inscricao', backref='membro', lazy=True)
+
+class Ministerio(db.Model):
+    __tablename__ = 'ministérios'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(200))
+    membros_vinculados = db.relationship('MembroMinisterio', backref='ministério', lazy=True)
+
+class Funcao(db.Model):
+    __tablename__ = 'funções'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+
+class MembroMinisterio(db.Model):
+    __tablename__ = 'membro_ministerio'
+    id = db.Column(db.Integer, primary_key=True)
+    membro_id = db.Column(db.Integer, db.ForeignKey('membros.id'), nullable=False)
+    ministerio_id = db.Column(db.Integer, db.ForeignKey('ministérios.id'), nullable=False)
+    funcao_id = db.Column(db.Integer, db.ForeignKey('funções.id'), nullable=False)
+    membro = db.relationship('Membro', backref='ministerios_vinculados')
+    funcao = db.relationship('Funcao')
+
+# --- NOVAS TABELAS: CALENDÁRIO E EVENTOS ---
+
+class Evento(db.Model):
+    __tablename__ = 'eventos'
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(150), nullable=False)
+    descricao = db.Column(db.Text)
+    data_evento = db.Column(db.DateTime, nullable=False)
+    congregacao_id = db.Column(db.Integer, db.ForeignKey('congregações.id'))
+    permite_inscricao = db.Column(db.Boolean, default=False)
+    ativa = db.Column(db.Boolean, default=True)
+    inscritos = db.relationship('Inscricao', backref='evento', lazy=True)
+
+class Inscricao(db.Model):
+    __tablename__ = 'inscricoes'
+    id = db.Column(db.Integer, primary_key=True)
+    membro_id = db.Column(db.Integer, db.ForeignKey('membros.id'), nullable=False)
+    evento_id = db.Column(db.Integer, db.ForeignKey('eventos.id'), nullable=False)
+    presenca = db.Column(db.Boolean, default=False)
+    data_inscricao = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Agenda(db.Model):
+    __tablename__ = 'agenda'
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(100), nullable=False)
+    dia_semana = db.Column(db.Integer) # 0=Segunda, 6=Domingo
+    horario = db.Column(db.Time, nullable=False)
+    tipo = db.Column(db.String(50)) # Culto, Reunião, etc.
+    congregacao_id = db.Column(db.Integer, db.ForeignKey('congregações.id'))

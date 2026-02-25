@@ -1,0 +1,177 @@
+from flask import redirect, url_for, render_template, request, flash, jsonify
+from flask_login import login_required
+from app.main import main_bp
+from app.models import db
+from app.models.igreja import Membro, Congregacao, Ministerio, Funcao, MembroMinisterio
+from datetime import datetime
+import json
+
+@main_bp.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    if request.method == 'POST':
+        try:
+            membro_id = request.form.get('membro_id')
+            data_nasc_str = request.form.get('data_nascimento')
+            data_bat_str = request.form.get('data_batismo')
+            
+            data_nasc = datetime.strptime(data_nasc_str, '%Y-%m-%d').date() if data_nasc_str else None
+            data_bat = datetime.strptime(data_bat_str, '%Y-%m-%d').date() if data_bat_str else None
+            
+            cong_ids = request.form.getlist('congregacoes[]')
+            congs = Congregacao.query.filter(Congregacao.id.in_(cong_ids)).all()
+
+            if membro_id:
+                membro = Membro.query.get_or_404(membro_id)
+                membro.nome = request.form.get('nome')
+                membro.data_nascimento = data_nasc
+                membro.data_batismo = data_bat
+                membro.tipo = request.form.get('tipo_membro')
+                membro.responsaveis = request.form.get('responsaveis')
+                membro.info_medica = request.form.get('info_medica')
+                membro.congregações = congs
+                membro.observacoes = request.form.get('observacoes')
+                flash('Membro atualizado!', 'success')
+            else:
+                novo = Membro(
+                    nome=request.form.get('nome'),
+                    data_nascimento=data_nasc,
+                    data_batismo=data_bat,
+                    tipo=request.form.get('tipo_membro'),
+                    responsaveis=request.form.get('responsaveis'),
+                    info_medica=request.form.get('info_medica'),
+                    observacoes=request.form.get('observacoes')
+                )
+                novo.congregações = congs
+                db.session.add(novo)
+                db.session.flush()
+
+                min_id = request.form.get('ministerio_id')
+                func_id = request.form.get('funcao_id')
+                if min_id and func_id:
+                    vinculo = MembroMinisterio(membro_id=novo.id, ministerio_id=min_id, funcao_id=func_id)
+                    db.session.add(vinculo)
+                
+                flash('Membro cadastrado!', 'success')
+            
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao salvar: {str(e)}', 'danger')
+        return redirect(url_for('main.dashboard'))
+    
+    membros = Membro.query.order_by(Membro.data_cadastro.desc()).all()
+    
+    # Prepara dados dos membros para o JavaScript com segurança
+    membros_json = []
+    for m in membros:
+        membros_json.append({
+            'id': m.id,
+            'nome': m.nome,
+            'data_nascimento': m.data_nascimento.strftime('%Y-%m-%d') if m.data_nascimento else '',
+            'data_batismo': m.data_batismo.strftime('%Y-%m-%d') if m.data_batismo else '',
+            'tipo': m.tipo,
+            'responsaveis': m.responsaveis or '',
+            'info_medica': m.info_medica or '',
+            'observacoes': m.observacoes or '',
+            'congregações': [{'id': c.id} for c in m.congregações]
+        })
+
+    return render_template('main/dashboard.html', 
+                         congregacoes=Congregacao.query.all(), 
+                         ministerios=Ministerio.query.all(),
+                         funcoes=Funcao.query.all(),
+                         membros=membros,
+                         membros_json=membros_json)
+
+@main_bp.route('/congregacoes', methods=['GET', 'POST'])
+@login_required
+def congregacoes():
+    if request.method == 'POST':
+        cong_id = request.form.get('cong_id')
+        if cong_id:
+            cong = Congregacao.query.get(cong_id)
+            cong.nome = request.form.get('nome')
+            cong.endereco = request.form.get('endereco')
+        else:
+            db.session.add(Congregacao(nome=request.form.get('nome'), endereco=request.form.get('endereco')))
+        db.session.commit()
+        return redirect(url_for('main.congregacoes'))
+    return render_template('main/congregacoes.html', congregacoes=Congregacao.query.all(), membros_todos=Membro.query.all())
+
+@main_bp.route('/grupos', methods=['GET', 'POST'])
+@login_required
+def grupos():
+    if request.method == 'POST':
+        tipo = request.form.get('tipo_acao')
+        item_id = request.form.get('item_id')
+        if tipo == 'novo_ministerio':
+            if item_id:
+                minis = Ministerio.query.get(item_id)
+                minis.nome = request.form.get('nome')
+                minis.descricao = request.form.get('descricao')
+            else:
+                db.session.add(Ministerio(nome=request.form.get('nome'), descricao=request.form.get('descricao')))
+        elif tipo == 'nova_funcao':
+            if item_id:
+                func = Funcao.query.get(item_id)
+                func.nome = request.form.get('nome')
+            else:
+                db.session.add(Funcao(nome=request.form.get('nome')))
+        db.session.commit()
+        return redirect(url_for('main.grupos'))
+    return render_template('main/grupos.html', ministerios=Ministerio.query.all(), funcoes=Funcao.query.all(), membros=Membro.query.all())
+
+@main_bp.route('/vincular_ministerio', methods=['POST'])
+@login_required
+def vincular_ministerio():
+    data = request.get_json()
+    existe = MembroMinisterio.query.filter_by(membro_id=data['membro_id'], ministerio_id=data['ministerio_id'], funcao_id=data['funcao_id']).first()
+    if not existe:
+        db.session.add(MembroMinisterio(membro_id=data['membro_id'], ministerio_id=data['ministerio_id'], funcao_id=data['funcao_id']))
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Vínculo já existe'})
+
+@main_bp.route('/vincular_membro', methods=['POST'])
+@login_required
+def vincular_membro():
+    data = request.get_json()
+    membro = Membro.query.get(data['membro_id'])
+    cong = Congregacao.query.get(data['cong_id'])
+    if cong not in membro.congregações:
+        membro.congregações.append(cong)
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False})
+
+@main_bp.route('/congregacao/deletar/<int:id>')
+@login_required
+def deletar_congregacao(id):
+    db.session.delete(Congregacao.query.get_or_404(id))
+    db.session.commit()
+    return redirect(url_for('main.congregacoes'))
+
+@main_bp.route('/membro/deletar/<int:id>')
+@login_required
+def deletar_membro(id):
+    db.session.delete(Membro.query.get_or_404(id))
+    db.session.commit()
+    flash('Membro removido!', 'success')
+    return redirect(url_for('main.dashboard'))
+
+@main_bp.route('/ministerio/deletar/<int:id>')
+@login_required
+def deletar_ministerio(id):
+    db.session.delete(Ministerio.query.get_or_404(id))
+    db.session.commit()
+    flash('Ministério removido!', 'success')
+    return redirect(url_for('main.grupos'))
+
+@main_bp.route('/funcao/deletar/<int:id>')
+@login_required
+def deletar_funcao(id):
+    db.session.delete(Funcao.query.get_or_404(id))
+    db.session.commit()
+    flash('Função removida!', 'success')
+    return redirect(url_for('main.grupos'))

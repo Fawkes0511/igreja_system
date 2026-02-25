@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block page_title %}Presenças - {{ evento.titulo }}{% endblock %}
+
+{% block content %}
+<style>
+  .pg-wrap{max-width:1200px;margin:0 auto}
+  .topbar{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:18px}
+  .titlebox{display:flex;flex-direction:column;gap:6px}
+  .titlebox h2{margin:0;color:var(--azul-marinho);font-size:20px}
+  .meta{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--cinza-texto)}
+  .meta span{background:var(--cinza-fundo);border:1px solid var(--cinza-borda);padding:4px 8px;border-radius:999px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{border:1px solid var(--cinza-borda);background:#fff;color:var(--azul-marinho);padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:8px}
+  .btn-primary2{border:none;background:var(--azul-marinho);color:#fff}
+  .btn-green{border:none;background:var(--verde-folha);color:#fff}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px}
+  .cards{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:12px}
+  .stat{background:#fff;border:1px solid var(--cinza-borda);border-radius:14px;padding:14px}
+  .stat .k{font-size:12px;color:var(--cinza-texto);font-weight:700}
+  .stat .v{font-size:26px;color:var(--azul-marinho);font-weight:900;margin-top:6px;line-height:1}
+  .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .search{flex:1;min-width:260px}
+  .search input{width:100%;padding:12px;border:1px solid var(--cinza-borda);border-radius:12px}
+  .hint{font-size:12px;color:var(--cinza-texto)}
+  .tablewrap{background:#fff;border:1px solid var(--cinza-borda);border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  thead th{background:var(--cinza-fundo);color:var(--azul-marinho);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:12px;border-bottom:1px solid var(--cinza-borda);text-align:left}
+  tbody td{padding:12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+  tbody tr:hover{background:#fafafa}
+  .name{font-weight:800;color:#1f2d3d}
+  .small{font-size:12px;color:var(--cinza-texto)}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;font-weight:800;font-size:12px;border:1px solid var(--cinza-borda);background:#fff;cursor:pointer}
+  .pill.presente{background:#e9f7ef;border-color:#b7e4c7;color:#1b7f3a}
+  .pill.falta{background:#fdecea;border-color:#f5c6cb;color:#b02a37}
+  .obs{width:100%;padding:10px;border:1px solid var(--cinza-borda);border-radius:10px}
+  .row-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .toast{position:fixed;right:18px;bottom:18px;background:#111;color:#fff;padding:10px 12px;border-radius:12px;opacity:0;transform:translateY(10px);transition:.25s;z-index:9999;font-size:13px}
+  .toast.show{opacity:1;transform:translateY(0)}
+  @media (max-width: 980px){
+    .cards{grid-template-columns:repeat(2,minmax(160px,1fr))}
+    thead{display:none}
+    table, tbody, tr, td{display:block;width:100%}
+    tbody td{border-bottom:none}
+    tbody tr{border-bottom:1px solid #eee}
+    .mobile-label{display:block;font-size:11px;color:var(--cinza-texto);font-weight:800;margin-bottom:6px;text-transform:uppercase}
+  }
+</style>
+
+<div class="pg-wrap">
+  <div class="topbar">
+    <div class="titlebox">
+      <h2>Gestão de Presenças</h2>
+      <div class="meta">
+        <span><i class="fas fa-calendar"></i> {{ evento.data_evento.strftime('%d/%m/%Y %H:%M') }}</span>
+        <span><i class="fas fa-bookmark"></i> {{ evento.titulo }}</span>
+        <span><i class="fas fa-church"></i> {{ evento.congregação.nome if evento.congregação else 'Geral / Sede' }}</span>
+      </div>
+      <div class="hint">
+        Marque presente/falta, escreva observações e clique em <b>Salvar alterações</b>.
+      </div>
+    </div>
+
+    <div class="actions">
+      <a class="btn" href="{{ url_for('eventos.eventos') }}"><i class="fas fa-arrow-left"></i> Voltar</a>
+        <i class="fas fa-list-check"></i> Gerar lista / Selecionar membros
+      </a>
+      <button class="btn btn-primary2" id="btnSalvar" onclick="salvarTudo()">
+        <i class="fas fa-save"></i> Salvar alterações
+      </button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="cards">
+      <div class="stat">
+        <div class="k">Total na lista</div>
+        <div class="v" id="stTotal">0</div>
+      </div>
+      <div class="stat">
+        <div class="k">Presentes</div>
+        <div class="v" id="stPres">0</div>
+      </div>
+      <div class="stat">
+        <div class="k">Faltas</div>
+        <div class="v" id="stFalta">0</div>
+      </div>
+      <div class="stat">
+        <div class="k">Com observação</div>
+        <div class="v" id="stObs">0</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search">
+        <input type="text" id="busca" placeholder="Buscar membro pelo nome..." oninput="filtrarLinhas()">
+      </div>
+      <div class="hint">
+        Dica: clique no status para alternar.
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34%">Membro</th>
+            <th style="width:16%">Status</th>
+            <th style="width:16%">Check-in</th>
+            <th>Observação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          {% for m in membros %}
+            {% set p = presencas.get(m.id) %}
+            {% set presente = (p.presente if p else false) %}
+            {% set checkin = (p.checkin_time.strftime('%d/%m %H:%M') if p and p.checkin_time else '') %}
+            {% set obs = (p.observacoes if p and p.observacoes else '') %}
+
+            <tr class="linha" data-nome="{{ m.nome|lower }}" data-id="{{ m.id }}">
+              <td>
+                <div class="mobile-label">Membro</div>
+                <div class="name">{{ m.nome }}</div>
+                <div class="small">ID #{{ m.id }}{% if m.tipo %} • {{ m.tipo }}{% endif %}</div>
+              </td>
+
+              <td>
+                <div class="mobile-label">Status</div>
+                <button type="button"
+                        class="pill {% if presente %}presente{% else %}falta{% endif %}"
+                        data-presente="{% if presente %}1{% else %}0{% endif %}"
+                        onclick="toggleStatus(this)">
+                  {% if presente %}
+                    <i class="fas fa-check-circle"></i> Presente
+                  {% else %}
+                    <i class="fas fa-times-circle"></i> Falta
+                  {% endif %}
+                </button>
+              </td>
+
+              <td>
+                <div class="mobile-label">Check-in</div>
+                <div class="small checkin">{{ checkin if checkin else '—' }}</div>
+              </td>
+
+              <td>
+                <div class="mobile-label">Observação</div>
+                <input class="obs"
+                       type="text"
+                       placeholder="Ex.: chegou atrasado / visitante / ficou até o fim..."
+                       value="{{ obs|e }}"
+                       oninput="atualizarStats()">
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Salvo ✅</div>
+
+<script>
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg || 'OK';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  function toggleStatus(btn) {
+    const isPres = btn.getAttribute('data-presente') === '1';
+    const newVal = isPres ? '0' : '1';
+    btn.setAttribute('data-presente', newVal);
+
+    if (newVal === '1') {
+      btn.classList.remove('falta');
+      btn.classList.add('presente');
+      btn.innerHTML = '<i class="fas fa-check-circle"></i> Presente';
+    } else {
+      btn.classList.remove('presente');
+      btn.classList.add('falta');
+      btn.innerHTML = '<i class="fas fa-times-circle"></i> Falta';
+    }
+
+    atualizarStats();
+  }
+
+  function filtrarLinhas() {
+    const q = (document.getElementById('busca').value || '').trim().toLowerCase();
+    document.querySelectorAll('.linha').forEach(tr => {
+      const nome = tr.getAttribute('data-nome') || '';
+      tr.style.display = (!q || nome.includes(q)) ? '' : 'none';
+    });
+  }
+
+  function atualizarStats() {
+    const rows = Array.from(document.querySelectorAll('.linha'));
+    const visibleRows = rows.filter(r => r.style.display !== 'none');
+
+    let total = visibleRows.length;
+    let pres = 0;
+    let falta = 0;
+    let comObs = 0;
+
+    visibleRows.forEach(tr => {
+      const btn = tr.querySelector('.pill');
+      const isPres = btn && btn.getAttribute('data-presente') === '1';
+      if (isPres) pres++; else falta++;
+
+      const obs = (tr.querySelector('.obs')?.value || '').trim();
+      if (obs.length > 0) comObs++;
+    });
+
+    document.getElementById('stTotal').textContent = total;
+    document.getElementById('stPres').textContent = pres;
+    document.getElementById('stFalta').textContent = falta;
+    document.getElementById('stObs').textContent = comObs;
+  }
+
+  async function salvarTudo() {
+    const btn = document.getElementById('btnSalvar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    try {
+      const presencas = [];
+      document.querySelectorAll('.linha').forEach(tr => {
+        const membroId = parseInt(tr.getAttribute('data-id'), 10);
+        const btnStatus = tr.querySelector('.pill');
+        const obs = (tr.querySelector('.obs')?.value || '').trim();
+        const presente = btnStatus && btnStatus.getAttribute('data-presente') === '1';
+
+        presencas.push({
+          membro_id: membroId,
+          presente: presente,
+          observacoes: obs
+        });
+      });
+
+      const resp = await fetch(window.location.href, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ presencas })
+      });
+
+      if (!resp.ok) throw new Error('Falha ao salvar');
+
+      toast('Salvo ✅');
+    } catch (e) {
+      console.error(e);
+      toast('Erro ao salvar ❌');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-save"></i> Salvar alterações';
+      atualizarStats();
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    atualizarStats();
+  });
+</script>
+{% endblock %}

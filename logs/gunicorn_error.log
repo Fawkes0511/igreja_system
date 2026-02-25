@@ -1,0 +1,10 @@
+[2026-01-28 10:28:34 -0300] [6766] [INFO] Starting gunicorn 23.0.0
+[2026-01-28 10:28:34 -0300] [6766] [INFO] Listening at: unix:igreja_system.sock (6766)
+[2026-01-28 10:28:34 -0300] [6766] [INFO] Using worker: sync
+[2026-01-28 10:28:34 -0300] [6769] [INFO] Booting worker with pid: 6769
+[2026-01-28 10:28:34 -0300] [6771] [INFO] Booting worker with pid: 6771
+[2026-01-28 10:28:34 -0300] [6772] [INFO] Booting worker with pid: 6772
+[2026-02-03 14:17:09 -0300] [6771] [INFO] Worker exiting (pid: 6771)
+[2026-02-03 14:17:09 -0300] [6766] [INFO] Handling signal: term
+[2026-02-03 14:17:09 -0300] [6769] [INFO] Worker exiting (pid: 6769)
+[2026-02-03 14:17:09 -0300] [6772] [INFO] Worker exiting (pid: 6772)

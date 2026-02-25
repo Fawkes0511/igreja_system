@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% block page_title %}Agenda e Eventos{% endblock %}
+
+{% block content %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+
+<style>
+    .calendar-container { background: #fff; border-radius: 16px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    
+    /* Correção FullCalendar: Sem espaços cinzas */
+    .fc { font-family: 'Inter', sans-serif; --fc-border-color: #f1f5f9; }
+    .fc-theme-standard th { border: none; }
+    .fc-col-header-cell { background: var(--azul-marinho); padding: 12px 0; border: none !important; }
+    .fc-col-header-cell-cushion { color: #fff !important; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; font-weight: 700; text-decoration: none; }
+    .fc-day-today { border: 3px solid #eab308 !important; border-radius: 4px; background: rgba(234, 179, 8, 0.03) !important; }
+    .fc-daygrid-day-number { color: #64748b; font-weight: 800; padding: 8px 12px !important; text-decoration: none; }
+    
+    /* Esconde os dias do mês passado/seguinte e zera as bordas deles */
+    .fc-day-other { visibility: hidden !important; border: none !important; }
+
+    /* CSS do Modal e Pílulas de Eventos */
+    .fc-event { cursor: pointer; border: none !important; border-radius: 6px !important; padding: 6px 8px !important; margin: 2px 4px !important; font-size: 0.85rem !important; box-shadow: 0 2px 5px rgba(0,0,0,0.08); transition: transform 0.2s; }
+    .fc-event:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12); }
+    .fc-event-main { display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-event-time-custom { font-weight: 900; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+    .fc-event-title-custom { font-weight: 700; }
+    .fc-event-loc-custom { font-weight: 400; opacity: 0.9; font-size: 0.75rem; }
+    .fc .fc-toolbar-title { font-weight: 900; color: var(--azul-marinho); text-transform: capitalize; font-size: 1.8rem; }
+
+    /* Correção Inputs do Flatpickr (Aparência Premium) */
+    input.flatpickr-input {
+        width: 100% !important; 
+        padding: 12px !important; 
+        border: 1px solid #e2e8f0 !important; 
+        border-radius: 10px !important; 
+        margin-bottom: 15px !important; 
+        font-weight: 600 !important; 
+        background: #f8fafc !important; 
+        color: var(--azul-marinho) !important;
+        box-sizing: border-box !important;
+        cursor: pointer !important;
+        font-family: inherit !important;
+    }
+
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    .modal-content { background: #fff; border-radius: 20px; width: 95%; max-width: 650px; max-height: 90vh; overflow-y: auto; padding: 0; position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); }
+    .modal-tabs { display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 20px 20px 0 0; }
+    .tab-btn { flex: 1; padding: 18px 5px; border: none; background: none; font-weight: 800; font-size: 0.85rem; color: #94a3b8; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
+    .tab-btn.active { color: var(--azul-marinho); border-bottom: 3px solid var(--azul-marinho); background: #fff; }
+
+    .member-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
+    .member-info { display: flex; align-items: center; gap: 12px; }
+    .member-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; background: #f1f5f9; display: flex; align-items: center; justify-content: center; color: #94a3b8; }
+
+    .toggle-group { display: flex; background: #f1f5f9; border-radius: 8px; padding: 4px; border: 1px solid #e2e8f0; gap: 4px; }
+    .toggle-btn { width: 40px; height: 35px; border: none; background: transparent; border-radius: 6px; font-size: 16px; cursor: pointer; color: #94a3b8; font-weight: 800; }
+    .toggle-btn.yes.active { background: #10b981; color: white; transform: scale(1.05); }
+    .toggle-btn.no.active { background: #ef4444; color: white; transform: scale(1.05); }
+
+    .day-pill input[type="checkbox"] { display: none; }
+    .day-pill span { display: inline-block; padding: 8px 14px; border-radius: 8px; background: #f8fafc; color: #64748b; font-weight: 800; font-size: 13px; cursor: pointer; border: 1px solid #e2e8f0; }
+    .day-pill input[type="checkbox"]:checked + span { background: var(--azul-marinho); color: #fff; border-color: var(--azul-marinho); }
+
+    .event-table { width: 100%; border-collapse: collapse; }
+    .event-table th { background: #f8fafc; padding: 12px; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; text-align: left; }
+    .event-table td { padding: 12px; border-bottom: 1px solid #f0f4f8; color: #334155; font-size: 0.9rem; }
+    .btn-sm { padding: 6px 12px; border-radius: 6px; border: none; font-size: 0.75rem; font-weight: 700; cursor: pointer; color: white; }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+    <div style="display: flex; gap: 15px; font-weight: 700; font-size: 0.85rem; color: #64748b;">
+        <span style="display:flex; align-items:center; gap:6px;"><div style="width:12px; height:12px; border-radius:50%; background:#f97316;"></div> Temporário</span>
+        <span style="display:flex; align-items:center; gap:6px;"><div style="width:12px; height:12px; border-radius:50%; background:#10b981;"></div> Recorrente</span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button onclick="openModalForm('evento')" class="btn-primary" style="background:#f97316;"><i class="fas fa-bolt"></i> Novo Temporário</button>
+        <button onclick="openModalForm('agenda')" class="btn-primary" style="background:#10b981;"><i class="fas fa-sync-alt"></i> Novo Recorrente</button>
+        <button onclick="openListModal()" class="btn-primary" style="background:var(--azul-marinho);"><i class="fas fa-list"></i> Listar Cadastros</button>
+    </div>
+</div>
+
+<div class="calendar-container">
+    <div id='calendar'></div>
+</div>
+
+<div id="modal-gestao" class="modal-overlay">
+    <div class="modal-content">
+        <button onclick="closeModal('modal-gestao')" style="position:absolute; top:15px; right:15px; border:none; background:rgba(255,255,255,0.2); width:35px; height:35px; border-radius:50%; cursor:pointer; color: white; font-size: 18px;">&times;</button>
+        <div style="padding: 25px 20px; background: var(--azul-marinho); border-radius: 20px 20px 0 0; color: white; text-align: center;">
+            <h3 id="gestao-title" style="margin: 0; font-weight: 900; font-size: 1.5rem;"></h3>
+            <p id="gestao-subtitle" style="margin: 6px 0 0; font-size: 0.9rem; opacity: 0.8; font-weight: 600;"></p>
+        </div>
+        <div class="modal-tabs" style="border-radius: 0;">
+            <button class="tab-btn active" onclick="switchTab('tab-inscricao')"><i class="fas fa-list"></i> 1. Inscrição</button>
+            <button class="tab-btn" onclick="switchTab('tab-presenca')"><i class="fas fa-user-check"></i> 2. Chamada</button>
+            <button class="tab-btn" onclick="switchTab('tab-grafico'); drawChart();"><i class="fas fa-chart-pie"></i> 3. Relatório</button>
+        </div>
+
+        <div id="tab-inscricao" class="tab-content">
+            <div style="padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                <input type="text" placeholder="Buscar membro..." onkeyup="filterList('lista-inscricao', this.value)" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; outline:none;">
+            </div>
+            <div id="lista-inscricao" style="height: 350px; overflow-y:auto;"></div>
+        </div>
+
+        <div id="tab-presenca" class="tab-content" style="display:none;">
+            <div id="lista-presenca" style="height: 400px; overflow-y:auto; background: #f8fafc; padding: 10px;"></div>
+        </div>
+
+        <div id="tab-grafico" class="tab-content" style="display:none; padding: 40px 20px; text-align: center;">
+            <div style="width: 100%; max-width: 250px; margin: 0 auto 20px;"><canvas id="presencaChart"></canvas></div>
+            <div id="chart-stats" style="display: flex; justify-content: space-around; font-weight: 700; background: #f8fafc; padding: 20px; border-radius: 12px;"></div>
+        </div>
+
+        <div style="padding: 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+            <button id="btn-del-gestao" class="btn-primary" style="background: #fee2e2; color: #ef4444; padding: 10px 15px; font-weight: 800;"><i class="fas fa-trash"></i> Apagar/Cancelar Dia</button>
+            <button onclick="salvarGestao()" class="btn-primary" style="padding: 10px 25px; font-weight: 800;"><i class="fas fa-save"></i> Salvar Chamada</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-form" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px; padding: 30px;">
+        <button onclick="closeModal('modal-form')" style="position:absolute; top:20px; right:20px; border:none; background:#f1f5f9; width: 35px; height: 35px; border-radius: 50%; cursor: pointer;">&times;</button>
+        <h3 id="form-title" style="margin-bottom:20px; color:var(--azul-marinho); font-weight: 800;"></h3>
+
+        <form method="POST" action="{{ url_for('eventos.eventos') }}" id="form-evento">
+            <input type="hidden" name="tipo_acao" id="tipo_acao">
+
+            <label style="display:block; font-size:12px; font-weight:800; margin-bottom:6px; color: #64748b;">TÍTULO DO EVENTO/CULTO</label>
+            <input type="text" name="titulo" required placeholder="Ex: Culto de Ensino" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:15px; font-weight: 600;">
+
+            <div id="box-evento">
+                <label style="display:block; font-size:12px; font-weight:800; margin-bottom:6px; color: #64748b;">DATA E HORA EXATA</label>
+                <input type="text" id="data_evento" name="data_evento" placeholder="Selecione o dia e horário...">
+            </div>
+
+            <div id="box-agenda" style="display:none;">
+                <label style="display:block; font-size:12px; font-weight:800; margin-bottom:6px; color: #64748b;">DIAS DA SEMANA</label>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom:15px;">
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="0"><span>Seg</span></label>
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="1"><span>Ter</span></label>
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="2"><span>Qua</span></label>
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="3"><span>Qui</span></label>
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="4"><span>Sex</span></label>
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="5"><span>Sáb</span></label>
+                    <label class="day-pill"><input type="checkbox" name="dia_semana" value="6"><span>Dom</span></label>
+                </div>
+                <label style="display:block; font-size:12px; font-weight:800; margin-bottom:6px; color: #64748b;">HORÁRIO FIXO</label>
+                <input type="text" id="horario" name="horario" placeholder="Selecione o horário...">
+            </div>
+
+            <label style="display:block; font-size:12px; font-weight:800; margin-bottom:6px; color: #64748b;">CONGREGAÇÃO / LOCAL</label>
+            <select name="congregacao_id" required style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:25px; font-weight: 600; background: #fff;">
+                <option value="" disabled selected>Selecione onde será...</option>
+                {% for c in congregacoes %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+            </select>
+
+            <button type="submit" class="btn-primary" style="width:100%; padding:15px; border-radius: 10px; font-size: 1rem; font-weight: 800;">Cadastrar</button>
+        </form>
+    </div>
+</div>
+
+<div id="modal-lista" class="modal-overlay">
+    <div class="modal-content" style="max-width: 800px;">
+        <button onclick="closeModal('modal-lista')" style="position:absolute; top:20px; right:20px; border:none; background:#f1f5f9; width: 35px; height: 35px; border-radius: 50%; cursor: pointer;">&times;</button>
+        <h3 style="padding: 20px; margin:0; background: var(--azul-marinho); color: white; border-radius: 20px 20px 0 0; font-weight: 800;"><i class="fas fa-list"></i> Cadastros Ativos</h3>
+        <div style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+            <table class="event-table">
+                <thead><tr><th>Data / Regra</th><th>Título</th><th>Local</th><th>Tipo</th><th>Ação</th></tr></thead>
+                <tbody id="lista-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentEventId = null;
+let stateData = { inscricoes: {}, presencas: {}, obs: {}, membrosInfo: {} };
+let chartInstance = null;
+
+// Recebe do Python os dias que foram "Cancelados"
+const datasCanceladas = {{ datas_canceladas | tojson | safe if datas_canceladas else '[]' }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    flatpickr("#data_evento", { enableTime: true, dateFormat: 'Y-m-d\\TH:i', altInput: true, altFormat: 'd/m/Y \\à\\s H:i', locale: 'pt', time_24hr: true });
+    flatpickr("#horario", { enableTime: true, noCalendar: true, dateFormat: 'H:i', altInput: true, altFormat: 'H:i', time_24hr: true, locale: 'pt' });
+
+    // Correção Validação do Formulário
+    document.getElementById('form-evento').addEventListener('submit', function(e) {
+        const tipo = document.getElementById('tipo_acao').value;
+        if (tipo === 'nova_agenda') {
+            const checks = document.querySelectorAll('input[name="dia_semana"]:checked');
+            const horario = document.getElementById('horario').value;
+            if (checks.length === 0) { e.preventDefault(); alert('Selecione pelo menos um dia da semana!'); return; }
+            if (!horario || horario.trim() === '') { e.preventDefault(); alert('Selecione o horário!'); return; }
+        } else {
+            const dataEv = document.getElementById('data_evento').value;
+            if (!dataEv || dataEv.trim() === '') { e.preventDefault(); alert('Selecione a data e horário!'); return; }
+        }
+    });
+
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth', 
+        locale: 'pt-br', 
+        showNonCurrentDates: false,
+        fixedWeekCount: false, // <-- Tira a linha extra do calendário!
+        contentHeight: 'auto', // Ajusta altura ao tamanho real
+        headerToolbar: { left: 'prev,next', center: 'title', right: 'today' },
+        buttonText: { today: 'Mês Atual' }, // <-- Botão traduzido corretamente
+        events: {{ events_json | tojson | safe }},
+        
+        // Pulo do gato: Esconde a pílula verde se aquele dia específico foi cancelado!
+        eventDidMount: function(arg) {
+            if (arg.event.extendedProps.type === 'agenda') {
+                const d = arg.event.start;
+                const date_str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                if (datasCanceladas.includes(date_str)) {
+                    arg.el.style.display = 'none'; 
+                }
+            }
+        },
+
+        eventContent: function(arg) {
+            let t_str = arg.event.extendedProps.time_str || '';
+            let loc_str = arg.event.extendedProps.cong || '';
+            return { html: `
+                <div class="fc-event-main">
+                    <span class="fc-event-time-custom">${t_str}</span>
+                    <span class="fc-event-title-custom">${arg.event.title}</span>
+                    <span class="fc-event-loc-custom">- ${loc_str}</span>
+                </div>
+            `};
+        },
+
+        eventClick: async function(info) {
+            const type = info.event.extendedProps.type;
+            const real_id = info.event.extendedProps.real_id;
+            const titulo = info.event.title;
+
+            if (type === 'evento') {
+                currentEventId = real_id;
+                await loadModalGestao(titulo, "Evento Temporário");
+            } else if (type === 'agenda') {
+                try {
+                    document.body.style.cursor = 'wait';
+                    const d = info.event.start;
+                    const date_str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    
+                    const resp = await fetch(`/api/agenda/${real_id}/instanciar`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ data: date_str })
+                    });
+                    
+                    if (!resp.ok) { const erroBackend = await resp.text(); throw new Error(`HTTP ${resp.status} - ${erroBackend}`); }
+                    
+                    const resData = await resp.json();
+                    currentEventId = resData.evento_id;
+                    await loadModalGestao(titulo, `Culto Recorrente (${date_str.split('-').reverse().join('/')})`);
+                } catch (e) { alert("⚠️ Ocorreu um erro.\n\nDetalhes: " + e.message); 
+                } finally { document.body.style.cursor = 'default'; }
+            }
+        }
+    });
+    calendar.render();
+});
+
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+function openModalForm(tipo) {
+    const isTemp = (tipo === 'evento');
+    document.getElementById('tipo_acao').value = isTemp ? 'novo_evento' : 'nova_agenda';
+    document.getElementById('form-title').innerText = isTemp ? 'Cadastrar Temporário' : 'Cadastrar Regra Recorrente';
+    document.getElementById('box-evento').style.display = isTemp ? 'block' : 'none';
+    document.getElementById('box-agenda').style.display = !isTemp ? 'block' : 'none';
+    document.getElementById('modal-form').style.display = 'flex';
+}
+
+async function openListModal() {
+    document.getElementById('modal-lista').style.display = 'flex';
+    const tbody = document.getElementById('lista-tbody');
+    try {
+        const resp = await fetch('/api/eventos/todos');
+        const dados = await resp.json();
+        tbody.innerHTML = dados.map(e => `<tr><td><strong>${e.data}</strong></td><td>${e.titulo}</td><td>${e.congregacao}</td><td><span style="background:${e.cor}; color:white; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:800;">${e.tipo}</span></td><td><button class="btn-sm" style="background:#ef4444;" onclick="deletarCadastro('${e.tipo}', ${e.id}, this)">Excluir</button></td></tr>`).join('');
+    } catch(e) { tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar lista.</td></tr>'; }
+}
+
+async function deletarCadastro(tipoTexto, id, btn) {
+    if(!confirm('Apagar permanentemente este cadastro?')) return;
+    btn.disabled = true;
+    await fetch(`/${tipoTexto === 'Temporário' ? 'evento' : 'agenda'}/deletar/${id}`, {method:'POST'});
+    location.reload();
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).style.display = 'block';
+
+    const indices = { 'tab-inscricao': 0, 'tab-presenca': 1, 'tab-grafico': 2 };
+    document.querySelectorAll('.tab-btn')[indices[tabId]].classList.add('active');
+    if(tabId === 'tab-presenca') renderizarChamada();
+}
+
+async function loadModalGestao(titulo, subtitulo) {
+    document.getElementById('gestao-title').innerText = titulo;
+    document.getElementById('gestao-subtitle').innerText = subtitulo;
+    switchTab('tab-inscricao');
+
+    const resp = await fetch(`/api/evento/${currentEventId}/gestao`);
+    const data = await resp.json();
+
+    document.getElementById('btn-del-gestao').onclick = async () => {
+        if(confirm("Deseja apagar o culto DESTE DIA específico? (O histórico deste dia sumirá)")) {
+            await fetch(`/evento/deletar/${currentEventId}`, {method:'POST'});
+            location.reload();
+        }
+    };
+
+    stateData = { inscricoes: {}, presencas: {}, obs: {}, membrosInfo: {} };
+    data.membros.forEach(m => {
+        stateData.membrosInfo[m.id] = m;
+        stateData.inscricoes[m.id] = m.inscrito;
+        stateData.presencas[m.id] = m.presente;
+        stateData.obs[m.id] = m.obs;
+    });
+
+    renderizarInscricoes();
+    document.getElementById('modal-gestao').style.display = 'flex';
+}
+
+function getAvatar(foto) { return foto ? `<img src="/static${foto.startsWith('/')?foto:'/'+foto}" class="member-img">` : `<div class="member-img"><i class="fas fa-user"></i></div>`; }
+
+function renderizarInscricoes() {
+    const div = document.getElementById('lista-inscricao');
+    div.innerHTML = Object.values(stateData.membrosInfo).map(m => `
+        <div class="member-item search-row" data-name="${m.nome.toLowerCase()}">
+            <div class="member-info">${getAvatar(m.foto)}<span style="font-weight:800; color:var(--azul-marinho);">${m.nome}</span></div>
+            <div class="toggle-group">
+                <button class="toggle-btn no ${stateData.inscricoes[m.id] === false ? 'active' : ''}" onclick="setVal(${m.id}, 'inscricoes', false)"><i class="fas fa-times"></i></button>
+                <button class="toggle-btn yes ${stateData.inscricoes[m.id] === true ? 'active' : ''}" onclick="setVal(${m.id}, 'inscricoes', true)"><i class="fas fa-check"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderizarChamada() {
+    const div = document.getElementById('lista-presenca');
+    const inscritos = Object.values(stateData.membrosInfo).filter(m => stateData.inscricoes[m.id] === true);
+    if(inscritos.length === 0) return div.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;">Ninguém inscrito na Aba 1 ainda.</div>';
+    
+    div.innerHTML = inscritos.map(m => `
+        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; margin-bottom:10px; padding:15px;">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom:10px;">
+                <div class="member-info">${getAvatar(m.foto)}<span style="font-weight:800; color:var(--azul-marinho);">${m.nome}</span></div>
+                <div class="toggle-group">
+                    <button class="toggle-btn no ${stateData.presencas[m.id] === false ? 'active' : ''}" onclick="setVal(${m.id}, 'presencas', false)"><i class="fas fa-times"></i></button>
+                    <button class="toggle-btn yes ${stateData.presencas[m.id] === true ? 'active' : ''}" onclick="setVal(${m.id}, 'presencas', true)"><i class="fas fa-check"></i></button>
+                </div>
+            </div>
+            <input type="text" placeholder="Observações..." value="${stateData.obs[m.id] || ''}" onchange="stateData.obs[${m.id}]=this.value" style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none; background:#f8fafc;">
+        </div>
+    `).join('');
+}
+
+function setVal(id, context, val) { stateData[context][id] = val; if(context === 'inscricoes') renderizarInscricoes(); if(context === 'presencas') renderizarChamada(); }
+function filterList(divId, term) { const rows = document.getElementById(divId).getElementsByClassName('search-row'); for (let r of rows) r.style.display = r.getAttribute('data-name').includes(term.toLowerCase()) ? 'flex' : 'none'; }
+
+async function salvarGestao() {
+    const btn = document.querySelector('button[onclick="salvarGestao()"]');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    await fetch(`/api/evento/${currentEventId}/salvar_lote`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inscricoes: stateData.inscricoes, presencas: stateData.presencas, obs: stateData.obs }) });
+    btn.innerHTML = '<i class="fas fa-check"></i> Salvo!';
+    setTimeout(() => { btn.innerHTML = '<i class="fas fa-save"></i> Salvar Chamada'; }, 1500);
+}
+
+function drawChart() {
+    const inscritos = Object.values(stateData.membrosInfo).filter(m => stateData.inscricoes[m.id] === true);
+    let p = 0, f = 0, sr = 0;
+    inscritos.forEach(m => { if(stateData.presencas[m.id] === true) p++; else if(stateData.presencas[m.id] === false) f++; else sr++; });
+
+    document.getElementById('chart-stats').innerHTML = `<div style="text-align:center;"><span style="font-size:32px; color:var(--azul-marinho);">${inscritos.length}</span><br><span style="font-size:11px; color:#64748b;">INSCRITOS</span></div><div style="text-align:center;"><span style="font-size:32px; color:#10b981;">${p}</span><br><span style="font-size:11px; color:#64748b;">PRESENTES</span></div><div style="text-align:center;"><span style="font-size:32px; color:#ef4444;">${f}</span><br><span style="font-size:11px; color:#64748b;">FALTAS</span></div>`;
+
+    const ctx = document.getElementById('presencaChart').getContext('2d');
+    if(chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: ['Vieram', 'Faltaram', 'S/Resposta'], datasets: [{ data: [p, f, sr], backgroundColor: ['#10b981', '#ef4444', '#cbd5e1'], borderWidth: 0 }] }, options: { responsive: true, cutout: '75%', plugins: { legend: { display: false } } } });
+}
+</script>
+{% endblock %}
