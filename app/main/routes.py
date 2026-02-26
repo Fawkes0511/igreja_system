@@ -36,14 +36,28 @@ def dashboard():
     """
     Página inicial de visão geral do sistema.
     Mostra alguns números agregados para o administrador.
+    Eventos: mesma lógica da aba Eventos (exclui FIXO, CANCELADO e passados).
     """
+    hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    total_eventos = Evento.query.filter(
+        Evento.descricao.is_distinct_from('[FIXO]'),
+        Evento.descricao.is_distinct_from('[CANCELADO]'),
+        Evento.data_evento >= hoje,
+    ).count()
+
     stats = {
-        'total_membros': Membro.query.count(),
+        'total_membros_adultos': Membro.query.filter_by(tipo='Adulto').count(),
+        'total_membros_criancas': Membro.query.filter_by(tipo='Criança').count(),
         'total_congregacoes': Congregacao.query.count(),
         'total_ministerios': Ministerio.query.count(),
         'total_funcoes': Funcao.query.count(),
-        'total_eventos': Evento.query.count(),
+        'total_eventos': total_eventos,
     }
 
-    return render_template('main/dashboard.html', stats=stats)
+    congregacoes = Congregacao.query.filter_by(ativa=True).order_by(Congregacao.nome).all()
+    ministerios = Ministerio.query.order_by(Ministerio.nome).all()
+    funcoes = Funcao.query.order_by(Funcao.nome).all()
+
+    return render_template('main/dashboard.html', stats=stats,
+                          congregacoes=congregacoes, ministerios=ministerios, funcoes=funcoes)
 

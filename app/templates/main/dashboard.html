@@ -56,9 +56,15 @@
 
 <div class="dashboard-grid">
     <div class="dashboard-card">
-        <span class="dashboard-card-title">Membros cadastrados</span>
-        <span class="dashboard-card-value">{{ stats.total_membros }}</span>
-        <span class="dashboard-card-footer">Total de pessoas registradas no sistema.</span>
+        <span class="dashboard-card-title">Membros adultos</span>
+        <span class="dashboard-card-value">{{ stats.total_membros_adultos }}</span>
+        <span class="dashboard-card-footer">Membros cadastrados como adultos.</span>
+    </div>
+
+    <div class="dashboard-card">
+        <span class="dashboard-card-title">Crianças</span>
+        <span class="dashboard-card-value">{{ stats.total_membros_criancas }}</span>
+        <span class="dashboard-card-footer">Membros cadastrados como crianças.</span>
     </div>
 
     <div class="dashboard-card">
@@ -76,10 +82,138 @@
     </div>
 
     <div class="dashboard-card">
-        <span class="dashboard-card-title">Eventos</span>
+        <span class="dashboard-card-title">Eventos futuros</span>
         <span class="dashboard-card-value">{{ stats.total_eventos }}</span>
-        <span class="dashboard-card-footer">Quantidade total de eventos cadastrados.</span>
+        <span class="dashboard-card-footer">Eventos ativos de hoje em diante (mesma lista da aba Calendário).</span>
     </div>
 </div>
+
+<div class="card" style="margin-top: 30px;">
+    <h3 style="margin-bottom: 16px; font-family: 'Merriweather', serif; color: var(--azul-marinho);">Gráficos de vínculos</h3>
+    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Filtre por congregação, ministério, função e tipo de membro para visualizar a distribuição.</p>
+
+    <div class="graficos-filtros" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Exibir por</label>
+            <select id="filtro-eixo" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;">
+                <option value="por_congregacao">Por congregação</option>
+                <option value="por_ministerio">Por ministério</option>
+                <option value="por_funcao">Por função</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Tipo</label>
+            <select id="filtro-tipo" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;">
+                <option value="">Todos</option>
+                <option value="Adulto">Adulto</option>
+                <option value="Criança">Criança</option>
+                <option value="Visitante">Visitante</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Congregação</label>
+            <select id="filtro-congregacao" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;">
+                <option value="">Todas</option>
+                {% for c in congregacoes %}
+                <option value="{{ c.id }}">{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Ministério</label>
+            <select id="filtro-ministerio" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;">
+                <option value="">Todos</option>
+                {% for m in ministerios %}
+                <option value="{{ m.id }}">{{ m.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Função</label>
+            <select id="filtro-funcao" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;">
+                <option value="">Todas</option>
+                {% for f in funcoes %}
+                <option value="{{ f.id }}">{{ f.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display: flex; align-items: flex-end;">
+            <button type="button" onclick="atualizarGrafico()" class="btn-primary" style="padding: 10px 20px;">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <div style="position: relative; height: 360px;">
+        <canvas id="chartVinculos"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    let chartInstance = null;
+
+    function atualizarGrafico() {
+        const p = {};
+        p.eixo = document.getElementById('filtro-eixo').value;
+        const t = document.getElementById('filtro-tipo').value;
+        if (t) p.tipo = t;
+        const c = document.getElementById('filtro-congregacao').value;
+        if (c) p.congregacao_id = c;
+        const m = document.getElementById('filtro-ministerio').value;
+        if (m) p.ministerio_id = m;
+        const f = document.getElementById('filtro-funcao').value;
+        if (f) p.funcao_id = f;
+        const params = new URLSearchParams(p);
+
+        fetch('/api/dashboard/vinculos?' + params.toString(), {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(r => r.json())
+        .then(data => {
+            const labels = data.labels || [];
+            const values = data.values || [];
+
+            if (chartInstance) chartInstance.destroy();
+            const ctx = document.getElementById('chartVinculos').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Membros',
+                        data: values,
+                        backgroundColor: 'rgba(25, 42, 86, 0.7)',
+                        borderColor: '#192A56',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(err => console.error('Erro ao carregar dados:', err));
+    }
+
+    window.atualizarGrafico = atualizarGrafico;
+    document.querySelectorAll('#filtro-eixo, #filtro-tipo, #filtro-congregacao, #filtro-ministerio, #filtro-funcao').forEach(function(el) {
+        el.addEventListener('change', atualizarGrafico);
+    });
+    document.addEventListener('DOMContentLoaded', atualizarGrafico);
+})();
+</script>
 
 {% endblock %}
