@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Shekinah PE{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+
+    .dashboard-card {
+        background: white;
+        padding: 20px 22px;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .dashboard-card-title {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .dashboard-card-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+
+    .dashboard-card-footer {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .dashboard-welcome {
+        margin-bottom: 20px;
+    }
+</style>
+
+<div class="card dashboard-welcome">
+    <h3 style="margin-bottom: 8px;">Bem-vindo ao painel da igreja</h3>
+    <p style="color: #64748b; font-size: 0.95rem;">
+        Aqui você tem uma visão rápida dos principais números do sistema.
+    </p>
+</div>
+
+<div class="dashboard-grid">
+    <div class="dashboard-card">
+        <span class="dashboard-card-title">Membros cadastrados</span>
+        <span class="dashboard-card-value">{{ stats.total_membros }}</span>
+        <span class="dashboard-card-footer">Total de pessoas registradas no sistema.</span>
+    </div>
+
+    <div class="dashboard-card">
+        <span class="dashboard-card-title">Congregações</span>
+        <span class="dashboard-card-value">{{ stats.total_congregacoes }}</span>
+        <span class="dashboard-card-footer">Igrejas e pontos de pregação cadastrados.</span>
+    </div>
+
+    <div class="dashboard-card">
+        <span class="dashboard-card-title">Ministérios e funções</span>
+        <span class="dashboard-card-value">
+            {{ stats.total_ministerios + stats.total_funcoes }}
+        </span>
+        <span class="dashboard-card-footer">Soma de ministérios e funções disponíveis.</span>
+    </div>
+
+    <div class="dashboard-card">
+        <span class="dashboard-card-title">Eventos</span>
+        <span class="dashboard-card-value">{{ stats.total_eventos }}</span>
+        <span class="dashboard-card-footer">Quantidade total de eventos cadastrados.</span>
+    </div>
+</div>
+
+{% endblock %}

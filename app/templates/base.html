@@ -151,6 +151,9 @@
             <button class="toggle-btn" onclick="toggleSidebar()"><i class="fas fa-chevron-left"></i></button>
         </div>
         <nav class="nav-menu">
+            <a href="{{ url_for('main.dashboard') }}" class="nav-item {{ 'active' if request.endpoint and 'main.dashboard' in request.endpoint }}">
+                <i class="fas fa-chart-line"></i> <span>Dashboard</span>
+            </a>
             <a href="{{ url_for('membros.membros_page') }}" class="nav-item {{ 'active' if 'membros' in request.endpoint }}">
                 <i class="fas fa-user-plus"></i> <span>Membros</span>
             </a>
