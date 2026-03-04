@@ -58,6 +58,7 @@
                 <th>Tipo</th>
                 <th>Congregações</th>
                 <th>Ministérios</th>
+                <th>Status</th>
                 <th style="text-align: right;">Ações</th>
             </tr>
         </thead>
@@ -104,10 +105,28 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if m.ativo %}
+                            <span class="badge" style="background:#dcfce7;color:#166534;">Ativo</span>
+                        {% else %}
+                            <span class="badge" style="background:#fee2e2;color:#b91c1c;">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <div class="action-group" style="justify-content: flex-end;">
                             <button type="button" class="btn-icon" style="background: #0ea5e9;" onclick="verDetalhes({{ m.id }})" title="Ver Detalhes">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            <form method="POST" action="{{ url_for('membros.toggle_membro', id=m.id) }}" style="display:inline;">
+                                {% if m.ativo %}
+                                <button type="submit" class="btn-icon" style="background:#f97316;" title="Desativar">
+                                    <i class="fas fa-user-slash"></i>
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn-icon" style="background:#22c55e;" title="Ativar">
+                                    <i class="fas fa-user-check"></i>
+                                </button>
+                                {% endif %}
+                            </form>
                             <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="prepararEdicao({{ m.id }})" title="Editar">
                                 <i class="fas fa-pen"></i>
                             </button>
@@ -172,6 +191,12 @@
                 <div>
                     <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Batismo</label>
                     <input type="date" name="data_batismo" id="data_batismo" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                </div>
+                <div style="display:flex; align-items:center; margin-top: 24px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; color: #334155;">
+                        <input type="checkbox" name="ativo" id="ativo" checked style="width:16px;height:16px;">
+                        Membro ativo
+                    </label>
                 </div>
             </div>
 
@@ -300,6 +325,7 @@ function prepararEdicao(id) {
     document.getElementById('data_nascimento').value = m.data_nascimento;
     document.getElementById('data_batismo').value = m.data_batismo || '';
     document.getElementById('tipo_membro').value = m.tipo;
+    document.getElementById('ativo').checked = m.ativo !== false;
     document.getElementById('responsaveis').value = m.responsaveis || '';
     document.getElementById('info_medica').value = m.info_medica || '';
     document.getElementById('observacoes').value = m.observacoes || '';

@@ -26,6 +26,9 @@ def membros_page():
             membro.nome = request.form.get('nome')
             membro.tipo = request.form.get('tipo_membro')
 
+            # Status ativo/inativo do membro
+            membro.ativo = bool(request.form.get('ativo'))
+
             membro.observacoes = request.form.get('observacoes')
             membro.responsaveis = request.form.get('responsaveis')
             membro.alergias = request.form.get('info_medica')
@@ -129,6 +132,7 @@ def membros_page():
             'id': m.id,
             'nome': m.nome,
             'tipo': m.tipo,
+            'ativo': m.ativo,
             'foto_path': m.foto_path or '',
 
             'data_nascimento': (
@@ -161,6 +165,23 @@ def membros_page():
         membros=membros,
         membros_json=membros_json
     )
+
+
+@membros_bp.route('/membro/toggle/<int:id>', methods=['POST'])
+@login_required
+def toggle_membro(id):
+    membro = Membro.query.get_or_404(id)
+
+    try:
+        membro.ativo = not membro.ativo
+        db.session.commit()
+        status = 'ativado' if membro.ativo else 'desativado'
+        flash(f'Membro {status} com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao alterar status: {e}', 'danger')
+
+    return redirect(url_for('membros.membros_page'))
 
 
 @membros_bp.route('/membro/deletar/<int:id>')
