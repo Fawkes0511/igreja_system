@@ -92,7 +92,7 @@
             transition: 0.2s;
         }
         .toggle-btn:hover { background: rgba(255,255,255,0.2); }
-        .sidebar.collapsed .toggle-btn { display: none; } /* Esconde o botão de fechar quando já tá fechado, a logo serve de botão para abrir */
+        .sidebar.collapsed .toggle-btn { display: none; }
 
         /* Menu de Navegação */
         .nav-menu { padding: 20px 0; }
@@ -169,6 +169,9 @@
             
             <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 15px 20px;"></div>
             
+            <a href="{{ url_for('auth.listar_usuarios') }}" class="nav-item {{ 'active' if 'usuarios' in request.endpoint }}">
+                <i class="fas fa-user-shield"></i> <span>Gestão de Acessos</span>
+            </a>
             <a href="{{ url_for('auth.logout') }}" class="nav-item">
                 <i class="fas fa-sign-out-alt" style="color: #ef4444;"></i> <span style="color: #fca5a5;">Sair do Sistema</span>
             </a>
@@ -183,7 +186,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 8px 15px; border-radius: 30px; border: 1px solid #e2e8f0;">
                 <i class="fas fa-user-shield" style="font-size: 1.2rem; color: var(--amarelo-dourado);"></i>
-                <span style="font-weight: 800; font-size: 0.9rem; color: var(--azul-marinho);">Administrador</span>
+                <span style="font-weight: 800; font-size: 0.9rem; color: var(--azul-marinho);">{{ current_user.nome if current_user.is_authenticated else 'Administrador' }}</span>
             </div>
         </div>
         
@@ -212,7 +215,7 @@
     </script>
 
     <script>
-        // Oculta os alertas suavemente após 6 segundos
+        // Oculta os alertas suavemente após 3 segundos
         document.addEventListener('DOMContentLoaded', function() {
             var caixa = document.getElementById('caixa-alertas');
             if (caixa) {
