@@ -1,4 +1,5 @@
 from datetime import datetime, date
+from collections import defaultdict
 from flask import render_template, request, redirect, url_for, jsonify
 from flask_login import login_required
 from app.models import db
@@ -72,9 +73,47 @@ def eventos():
             cong_nome = c.congregação.nome if getattr(c, 'congregação', None) else 'Sede'
             c_events.append({
                 'id': f"EV_{c.id}", 'title': f"🚫 Cancelado: {c.titulo}", 'start': c.data_evento.isoformat(),
-                'color': '#64748b', 'allDay': False, # Cor cinza escuro profissional
+                'color': '#64748b', 'allDay': False, 
                 'extendedProps': {'type': 'evento', 'real_id': c.id, 'cong': cong_nome, 'time_str': c.data_evento.strftime('%H:%M'), 'status': 'cancelado'}
             })
+
+    # 3. Aniversariantes (Agrupados por dia no Calendário)
+    membros_ativos = Membro.query.filter_by(ativo=True).filter(Membro.data_nascimento.isnot(None)).all()
+    aniversarios_dict = defaultdict(list)
+    ano_atual = hoje.year
+
+    for m in membros_ativos:
+        # Gera o aniversário para o ano passado, atual e próximo (para o calendário poder navegar livremente)
+        for ano in [ano_atual - 1, ano_atual, ano_atual + 1]:
+            try:
+                dt_nasc = date(ano, m.data_nascimento.month, m.data_nascimento.day)
+            except ValueError:
+                # Trata anos não bissextos para quem nasceu em 29/02 (joga para 01/03)
+                dt_nasc = date(ano, 3, 1)
+                
+            aniversarios_dict[dt_nasc.isoformat()].append({
+                'id': m.id, 'nome': m.nome, 'foto': m.foto_path or '', 
+                'nascimento_original': m.data_nascimento.strftime('%d/%m/%Y'),
+                'idade_a_fazer': ano - m.data_nascimento.year
+            })
+
+    for data_str, lista_aniv in aniversarios_dict.items():
+        qtd = len(lista_aniv)
+        nomes_curtos = ", ".join([p['nome'].split()[0] for p in lista_aniv])
+        # Regra UX: Agrupar se for mais de 1 pessoa
+        titulo = f"🎂 {nomes_curtos}" if qtd == 1 else f"🎂 {qtd} Aniversariantes"
+        
+        c_events.append({
+            'id': f"ANIV_{data_str}",
+            'title': titulo,
+            'start': data_str,
+            'color': '#ef4444', # Vermelho (Danger)
+            'allDay': True,
+            'extendedProps': {
+                'type': 'aniversario',
+                'aniversariantes': lista_aniv
+            }
+        })
 
     return render_template('main/eventos.html', events_json=c_events, congregacoes=Congregacao.query.all(), datas_canceladas=datas_canceladas)
 
@@ -135,13 +174,10 @@ def del_item(tipo, id):
         else:
             db.session.delete(obj)
     else:
-        # A MÁGICA AQUI: É uma Agenda. Vamos varrer os filhos primeiro!
         filhos = Evento.query.filter_by(titulo=obj.titulo, congregacao_id=obj.congregacao_id).filter(Evento.descricao.in_(['[FIXO]', '[CANCELADO]'])).all()
         for filho in filhos:
-            Presenca.query.filter_by(evento_id=filho.id).delete() # Corta as correntes
-            db.session.delete(filho) # Apaga o fantasma
-        
-        # Agora sim apaga a mãe
+            Presenca.query.filter_by(evento_id=filho.id).delete()
+            db.session.delete(filho) 
         db.session.delete(obj)
         
     db.session.commit()
@@ -168,3 +204,36 @@ def reativar_evento(id):
         ev.descricao = '[FIXO]'
         db.session.commit()
     return jsonify({'success': True})
+
+@eventos_bp.route('/api/aniversariantes/proximos', methods=['GET'])
+@login_required
+def api_proximos_aniversariantes():
+    membros_ativos = Membro.query.filter_by(ativo=True).filter(Membro.data_nascimento.isnot(None)).all()
+    hoje = date.today()
+    proximos = []
+    
+    for m in membros_ativos:
+        mes, dia = m.data_nascimento.month, m.data_nascimento.day
+        try:
+            dt_nasc_este_ano = date(hoje.year, mes, dia)
+        except ValueError:
+            dt_nasc_este_ano = date(hoje.year, 3, 1)
+            
+        if dt_nasc_este_ano < hoje:
+            try:
+                dt_nasc_este_ano = date(hoje.year + 1, mes, dia)
+            except ValueError:
+                dt_nasc_este_ano = date(hoje.year + 1, 3, 1)
+        
+        dias_faltando = (dt_nasc_este_ano - hoje).days
+        if 0 <= dias_faltando <= 60:
+            proximos.append({
+                'nome': m.nome,
+                'foto': m.foto_path or '',
+                'data_formatada': dt_nasc_este_ano.strftime('%d/%m/%Y'),
+                'dias_faltando': dias_faltando,
+                'idade_a_fazer': dt_nasc_este_ano.year - m.data_nascimento.year
+            })
+    
+    proximos.sort(key=lambda x: x['dias_faltando'])
+    return jsonify(proximos)

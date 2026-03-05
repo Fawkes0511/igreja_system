@@ -10,7 +10,7 @@ class Config:
 
 class DevelopmentConfig(Config ):
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'postgresql://igreja_user:SenhaSegura123!@localhost/igreja_system'
+    SQLALCHEMY_DATABASE_URI = 'postgresql://igreja_user:SenhaSegura123!@localhost:5433/igreja_system'
 
 class ProductionConfig(Config):
     DEBUG = False

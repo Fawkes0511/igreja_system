@@ -20,7 +20,6 @@
     .fc-day-today { box-shadow: inset 0 0 0 3px #eab308 !important; border: none !important; border-radius: 4px; background: rgba(234, 179, 8, 0.03) !important; }
     .fc-daygrid-day-number { color: #64748b; font-weight: 800; padding: 8px 12px !important; text-decoration: none; }
     
-    /* CORREÇÃO DA ÁREA CINZA: Apaga completamente fundo, borda e texto de dias fora do mês */
     .fc-day-other { background: transparent !important; border: none !important; }
     .fc-day-other * { display: none !important; }
 
@@ -32,7 +31,6 @@
     .fc-event-loc-custom { font-weight: 400; opacity: 0.9; font-size: 0.75rem; }
     .fc .fc-toolbar-title { font-weight: 900; color: var(--azul-marinho); text-transform: capitalize; font-size: 1.8rem; }
 
-    /* CORREÇÃO DA CAIXA FLATPICKR: Estilo Premium Forçado */
     .premium-input {
         width: 100% !important; 
         padding: 12px !important; 
@@ -79,11 +77,13 @@
     <div style="display: flex; gap: 15px; font-weight: 700; font-size: 0.85rem; color: #64748b;">
         <span style="display:flex; align-items:center; gap:6px;"><div style="width:12px; height:12px; border-radius:50%; background:#f97316;"></div> Temporário</span>
         <span style="display:flex; align-items:center; gap:6px;"><div style="width:12px; height:12px; border-radius:50%; background:#10b981;"></div> Recorrente</span>
+        <span style="display:flex; align-items:center; gap:6px;"><div style="width:12px; height:12px; border-radius:50%; background:#ef4444;"></div> Aniversariante</span>
     </div>
-    <div style="display: flex; gap: 12px;">
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
         <button onclick="openModalForm('evento')" class="btn-primary" style="background:#f97316;"><i class="fas fa-bolt"></i> Novo Temporário</button>
-        <button onclick="openModalForm('agenda')" class="btn-primary" style="background:#10b981;"><i class="fas fa-sync-alt"></i> Novo Recorrente</button>
         <button onclick="openListModal()" class="btn-primary" style="background:var(--azul-marinho);"><i class="fas fa-list"></i> Listar Cadastros</button>
+        <button onclick="openAnivModal()" class="btn-primary" style="background:#ef4444;"><i class="fas fa-birthday-cake"></i> Aniversariantes</button>
+        <button onclick="openModalForm('agenda')" class="btn-primary" style="background:#10b981;"><i class="fas fa-sync-alt"></i> Novo Recorrente</button>
     </div>
 </div>
 
@@ -182,16 +182,23 @@
     </div>
 </div>
 
+<div id="modal-aniv" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+        <button onclick="closeModal('modal-aniv')" style="position:absolute; top:20px; right:20px; border:none; background:#f1f5f9; width: 35px; height: 35px; border-radius: 50%; cursor: pointer;">&times;</button>
+        <h3 id="aniv-modal-title" style="padding: 20px; margin:0; background: #ef4444; color: white; border-radius: 20px 20px 0 0; font-weight: 800;"></h3>
+        <div id="lista-aniv-body" style="padding: 20px; max-height: 60vh; overflow-y: auto;"></div>
+    </div>
+</div>
+
 <script>
 let currentEventId = null;
 let stateData = { inscricoes: {}, presencas: {}, obs: {}, membrosInfo: {} };
 let chartInstance = null;
-let calendar = null; // Calendário exportado pro escopo global
+let calendar = null;
 
 const datasCanceladas = {{ datas_canceladas | tojson | safe if datas_canceladas else '[]' }};
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Injeção do altInputClass com nosso CSS Premium
     flatpickr("#data_evento", { enableTime: true, dateFormat: 'Y-m-d\\TH:i', altInput: true, altFormat: 'd/m/Y \\à\\s H:i', locale: 'pt', time_24hr: true, altInputClass: 'premium-input', minDate: 'today' });
     flatpickr("#horario", { enableTime: true, noCalendar: true, dateFormat: 'H:i', altInput: true, altFormat: 'H:i', time_24hr: true, locale: 'pt', altInputClass: 'premium-input' });
 
@@ -214,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
         locale: 'pt-br', 
         showNonCurrentDates: false,
         fixedWeekCount: false,
-        height: 700, // Correção do "Espremido": Altura nobre fixa
+        height: 700,
         headerToolbar: { left: 'prev,next', center: 'title', right: 'today' },
         buttonText: { today: 'Mês Atual' },
         events: {{ events_json | tojson | safe }},
@@ -230,6 +237,9 @@ document.addEventListener('DOMContentLoaded', function() {
         },
 
         eventContent: function(arg) {
+            if (arg.event.extendedProps.type === 'aniversario') {
+                return { html: `<div class="fc-event-main" style="justify-content: center;"><span class="fc-event-title-custom">${arg.event.title}</span></div>` };
+            }
             let t_str = arg.event.extendedProps.time_str || '';
             let loc_str = arg.event.extendedProps.cong || '';
             return { html: `
@@ -243,8 +253,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
         eventClick: async function(info) {
             const type = info.event.extendedProps.type;
-            const real_id = info.event.extendedProps.real_id;
             const titulo = info.event.title;
+
+            if (type === 'aniversario') {
+                const anivs = info.event.extendedProps.aniversariantes;
+                const dataSplit = info.event.startStr.split('-');
+                const dataFormatada = `${dataSplit[2]}/${dataSplit[1]}/${dataSplit[0]}`;
+                
+                document.getElementById('aniv-modal-title').innerHTML = `<i class="fas fa-gift"></i> Aniversariantes (${dataFormatada})`;
+                
+                let html = anivs.map(a => `
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            ${getAvatar(a.foto)}
+                            <div>
+                                <strong style="color: var(--azul-marinho); display: block;">${a.nome}</strong>
+                                <span style="font-size: 12px; color: #64748b;">Nasc: ${a.nascimento_original}</span>
+                            </div>
+                        </div>
+                        <span style="background: #fee2e2; color: #ef4444; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 12px;">Fazendo ${a.idade_a_fazer} anos</span>
+                    </div>
+                `).join('');
+                
+                document.getElementById('lista-aniv-body').innerHTML = html;
+                document.getElementById('modal-aniv').style.display = 'flex';
+                return;
+            }
+
+            const real_id = info.event.extendedProps.real_id;
 
             if (type === 'evento') {
                 currentEventId = real_id;
@@ -293,20 +329,56 @@ async function openListModal() {
     } catch(e) { tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar lista.</td></tr>'; }
 }
 
-// CORREÇÃO: Deleta e atualiza modal SEM DAR RELOAD na página inteira
 async function deletarCadastro(tipoTexto, id, btn) {
     if(!confirm('Apagar permanentemente este cadastro?')) return;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     await fetch(`/${tipoTexto === 'Temporário' ? 'evento' : 'agenda'}/deletar/${id}`, {method:'POST'});
     
-    // Some com o evento do calendário de fundo
     const prefix = (tipoTexto === 'Temporário') ? 'EV_' : 'AG_';
     const ev = calendar.getEventById(prefix + id);
     if(ev) ev.remove();
 
-    // Recarrega apenas a tabelinha do modal
     await openListModal();
+}
+
+// === LÓGICA DO NOVO BOTÃO DE ANIVERSARIANTES (DASHBOARD) ===
+async function openAnivModal() {
+    document.getElementById('modal-aniv').style.display = 'flex';
+    document.getElementById('aniv-modal-title').innerHTML = '<i class="fas fa-birthday-cake"></i> Próximos Aniversariantes';
+    const body = document.getElementById('lista-aniv-body');
+    body.innerHTML = '<div style="text-align:center; padding: 20px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#ef4444;"></i></div>';
+    
+    try {
+        const resp = await fetch('/api/aniversariantes/proximos');
+        const dados = await resp.json();
+        
+        if (dados.length === 0) {
+            body.innerHTML = '<div style="text-align:center; padding: 30px; color:#64748b; font-weight:800;">Nenhum aniversariante nos próximos 60 dias.</div>';
+            return;
+        }
+
+        body.innerHTML = dados.map(a => {
+            let tag = a.dias_faltando === 0 ? '<span style="background:#ef4444; color:white; padding: 4px 8px; border-radius:12px; font-size:10px; font-weight:900;">É HOJE! 🎉</span>' :
+                      a.dias_faltando <= 7 ? `<span style="background:#f97316; color:white; padding: 4px 8px; border-radius:12px; font-size:10px; font-weight:800;">Faltam ${a.dias_faltando} dias</span>` :
+                      `<span style="background:#e2e8f0; color:#64748b; padding: 4px 8px; border-radius:12px; font-size:10px; font-weight:800;">Faltam ${a.dias_faltando} dias</span>`;
+            
+            return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    ${getAvatar(a.foto)}
+                    <div>
+                        <strong style="color: var(--azul-marinho); display: block;">${a.nome}</strong>
+                        <span style="font-size: 13px; font-weight:800; color: #ef4444;"><i class="far fa-calendar-alt"></i> ${a.data_formatada} <span style="color:#94a3b8; font-weight:600;">(${a.idade_a_fazer} anos)</span></span>
+                    </div>
+                </div>
+                ${tag}
+            </div>
+            `;
+        }).join('');
+    } catch(e) { 
+        body.innerHTML = '<div style="color:red; text-align:center; padding:20px;">Erro ao carregar lista.</div>'; 
+    }
 }
 
 function switchTab(tabId) {
@@ -420,7 +492,7 @@ function drawChart() {
     let chartData, chartColors, percTexto;
     if (inscritos.length === 0) {
         chartData = [1];
-        chartColors = ['#f1f5f9']; // Cinza claro (estado vazio)
+        chartColors = ['#f1f5f9']; 
         percTexto = '0%';
     } else {
         chartData = [p, f, sr];
@@ -429,7 +501,6 @@ function drawChart() {
         percTexto = perc + '%';
     }
 
-    // Plugin para escrever a percentagem no centro exato da rosca
     const centerTextPlugin = {
         id: 'centerText',
         beforeDraw: function(chart) {
@@ -458,12 +529,11 @@ function drawChart() {
             cutout: '80%', 
             plugins: { 
                 legend: { display: false },
-                tooltip: { enabled: inscritos.length > 0 } // Desativa a tooltip se estiver vazio
+                tooltip: { enabled: inscritos.length > 0 } 
             } 
         },
         plugins: [centerTextPlugin]
     });
 }
-
 </script>
 {% endblock %}
