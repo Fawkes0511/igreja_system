@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block page_title %}Grupos e Funções{% endblock %}
+{% block page_title %}Ministérios e Funções{% endblock %}
 
 {% block content %}
 <style>
@@ -15,9 +15,13 @@
     
     .badge { font-size: 0.8rem; padding: 6px 12px; border-radius: 20px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
     
-    .action-group { display: flex; gap: 8px; justify-content: flex-end; }
-    .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: opacity 0.2s; }
-    .btn-icon:hover { opacity: 0.85; }
+    .action-group { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+    .btn-action { background: none; border: none; padding: 6px 10px; border-radius: 6px; color: #64748b; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; text-decoration: none; font-family: inherit; }
+    .btn-action:hover { background: #f1f5f9; color: #334155; }
+    .btn-action.btn-del:hover { color: #b91c1c; background: #fef2f2; }
+    .btn-action i { font-size: 0.75rem; opacity: 0.9; }
+    .table-premium tr.row-clickable { cursor: pointer; }
+    .table-premium tr.row-clickable:hover { background: #f8fafc; }
 
     /* Modais Travados */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
@@ -33,9 +37,13 @@
     .list-item:last-child { border-bottom: none; }
     .list-item:hover { background: #f8fafc; }
 
-    /* Grid Responsivo para a Página */
-    .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
-    @media(max-width: 992px) { .grid-layout { grid-template-columns: 1fr; } }
+    /* Layout em coluna única: uma lista em cima da outra, com rolagem */
+    .grupos-layout { display: flex; flex-direction: column; gap: 24px; }
+    .grupos-section { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #f0f4f8; overflow: hidden; display: flex; flex-direction: column; }
+    .grupos-section-title { padding: 18px 20px; font-size: 1.1rem; font-weight: 700; color: var(--azul-marinho); border-bottom: 1px solid #e2e8f0; background: #fafbfc; }
+    .grupos-section-body { max-height: 340px; overflow-y: auto; overflow-x: auto; }
+    .grupos-section-body .table-premium { margin: 0; }
+    .grupos-section-body .table-premium th { position: sticky; top: 0; background: #f8fafc; z-index: 1; box-shadow: 0 1px 0 0 #e2e8f0; }
 </style>
 
 <div class="dashboard-header">
@@ -47,13 +55,10 @@
     </button>
 </div>
 
-<div class="grid-layout">
-    <div>
-        <h3 style="margin-bottom: 16px; color: var(--azul-marinho); font-size: 1.25rem; font-weight: 700;">
-            Ministérios e Grupos
-        </h3>
-        
-        <div class="table-container" style="overflow-x: auto;">
+<div class="grupos-layout">
+    <section class="grupos-section">
+        <h3 class="grupos-section-title">Ministérios</h3>
+        <div class="grupos-section-body">
             <table class="table-premium">
                 <thead>
                     <tr>
@@ -65,7 +70,7 @@
                 <tbody>
                     {% if ministerios and ministerios|length > 0 %}
                         {% for min in ministerios %}
-                        <tr>
+                        <tr class="row-clickable" data-min-id="{{ min.id }}">
                             <td style="width: 45%;">
                                 <div style="font-weight: 700; color: var(--azul-marinho); font-size: 1.05rem;">{{ min.nome }}</div>
                                 <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">{{ min.descricao or 'Sem descrição' }}</div>
@@ -76,16 +81,10 @@
                                     {{ min.membros_vinculados|length }} Membros
                                 </span>
                             </td>
-                            <td style="width: 25%;">
+                            <td style="width: 25%;" onclick="event.stopPropagation();">
                                 <div class="action-group">
-                                    <button type="button" class="btn-icon" style="background: #0ea5e9;" onclick="verDetalhesMinisterio({{ min.id }})" title="Ver Integrantes">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="openModal('ministerio', {id:'{{min.id}}', nome:'{{min.nome|escape}}', desc:'{{min.descricao|escape}}'})" title="Editar">
-                                        <i class="fas fa-pen"></i>
-                                    </button>
-                                    <a href="{{ url_for('grupos.deletar_ministerio', id=min.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar este ministério?')" title="Excluir">
-                                        <i class="fas fa-trash"></i>
+                                    <a href="{{ url_for('grupos.deletar_ministerio', id=min.id) }}" class="btn-action btn-del" onclick="event.stopPropagation(); return confirm('Tem certeza que deseja apagar este ministério?');" title="Excluir">
+                                        <i class="fas fa-trash-alt"></i> Excluir
                                     </a>
                                 </div>
                             </td>
@@ -102,35 +101,29 @@
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
 
-    <div>
-        <h3 style="margin-bottom: 16px; color: var(--azul-marinho); font-size: 1.25rem; font-weight: 700;">
-            Cargos e Funções
-        </h3>
-
-        <div class="table-container" style="overflow-x: auto;">
+    <section class="grupos-section">
+        <h3 class="grupos-section-title">Funções</h3>
+        <div class="grupos-section-body">
             <table class="table-premium">
                 <thead>
                     <tr>
                         <th>Nome da Função</th>
-                        <th style="text-align: right;">Ações</th>
+                        <th style="text-align: right; width: 120px;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% if funcoes and funcoes|length > 0 %}
                         {% for func in funcoes %}
-                        <tr>
+                        <tr class="row-clickable" data-func-id="{{ func.id }}">
                             <td>
                                 <strong style="color: #334155;">{{ func.nome }}</strong>
                             </td>
-                            <td>
+                            <td onclick="event.stopPropagation();">
                                 <div class="action-group">
-                                    <button type="button" class="btn-icon" style="background: var(--azul-marinho);" onclick="openModal('funcao', {id:'{{func.id}}', nome:'{{func.nome|escape}}'})" title="Editar">
-                                        <i class="fas fa-pen"></i>
-                                    </button>
-                                    <a href="{{ url_for('grupos.deletar_funcao', id=func.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar esta função? Se estiver vinculada a membros, o vínculo será removido e o membro ficará sem função.')" title="Excluir">
-                                        <i class="fas fa-trash"></i>
+                                    <a href="{{ url_for('grupos.deletar_funcao', id=func.id) }}" class="btn-action btn-del" onclick="event.stopPropagation(); return confirm('Tem certeza que deseja apagar esta função? Se estiver vinculada a membros, o vínculo será removido e o membro ficará sem função.');" title="Excluir">
+                                        <i class="fas fa-trash-alt"></i> Excluir
                                     </a>
                                 </div>
                             </td>
@@ -147,7 +140,7 @@
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
 </div>
 
 <div id="modal-geral" class="modal-overlay">
@@ -351,6 +344,21 @@ function verDetalhesMinisterio(id) {
 
     document.getElementById('modal-detalhes-min').style.display = 'flex';
 }
+
+// Clique na linha: ministérios = detalhes, funções = editar
+document.querySelector('.grupos-layout') && document.querySelector('.grupos-layout').addEventListener('click', function(e) {
+    var row = e.target.closest('tr.row-clickable');
+    if (!row) return;
+    if (e.target.closest('.action-group') || e.target.closest('button') || e.target.closest('a')) return;
+    var minId = row.getAttribute('data-min-id');
+    var funcId = row.getAttribute('data-func-id');
+    if (minId) { verDetalhesMinisterio(parseInt(minId, 10)); return; }
+    if (funcId) {
+        var firstTd = row.querySelector('td');
+        var nome = (firstTd && firstTd.textContent) ? firstTd.textContent.trim() : '';
+        openModal('funcao', { id: funcId, nome: nome });
+    }
+});
 
 // ===== delete funcao (GLOBAL) =====
 window.confirmDeleteFuncao = async function(id, nome) {

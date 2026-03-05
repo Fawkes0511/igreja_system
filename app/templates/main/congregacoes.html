@@ -17,9 +17,13 @@
     
     .badge { font-size: 0.8rem; padding: 6px 12px; border-radius: 20px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
     
-    .action-group { display: flex; gap: 8px; justify-content: flex-end; }
-    .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: opacity 0.2s; }
-    .btn-icon:hover { opacity: 0.85; }
+    .action-group { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+    .btn-action { background: none; border: none; padding: 6px 10px; border-radius: 6px; color: #64748b; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; text-decoration: none; font-family: inherit; }
+    .btn-action:hover { background: #f1f5f9; color: #334155; }
+    .btn-action.btn-del:hover { color: #b91c1c; background: #fef2f2; }
+    .btn-action i { font-size: 0.75rem; opacity: 0.9; }
+    .table-premium tr.row-clickable { cursor: pointer; }
+    .table-premium tr.row-clickable:hover { background: #f8fafc; }
 
     /* Modais - Sem fechamento por clique externo */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
@@ -55,7 +59,7 @@
         <tbody>
             {% if congregacoes and congregacoes|length > 0 %}
                 {% for cong in congregacoes %}
-                <tr>
+                <tr class="row-clickable" data-cong-id="{{ cong.id }}">
                     <td>
                         <strong style="color: var(--azul-marinho); font-size: 1.05rem;"><i class="fas fa-church" style="color: var(--amarelo-dourado); margin-right: 8px;"></i> {{ cong.nome }}</strong>
                     </td>
@@ -70,16 +74,13 @@
                             <i class="fas fa-users" style="color: var(--azul-marinho);"></i> {{ cong.membros|length }} Membros
                         </span>
                     </td>
-                    <td>
+                    <td onclick="event.stopPropagation();">
                         <div class="action-group">
-                            <button type="button" class="btn-icon" style="background: #0ea5e9;" onclick="openDetalhes({{ cong.id }})" title="Ver Detalhes e Mapa">
-                                <i class="fas fa-eye"></i>
+                            <button type="button" class="btn-action" onclick="event.stopPropagation(); openModalCadastro({{ cong.id }});" title="Editar">
+                                <i class="fas fa-pen"></i> Editar
                             </button>
-                            <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="openModalCadastro({{ cong.id }})" title="Editar">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                            <a href="{{ url_for('congregacoes.deletar_congregacao', id=cong.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar esta congregação?')" title="Excluir">
-                                <i class="fas fa-trash"></i>
+                            <a href="{{ url_for('congregacoes.deletar_congregacao', id=cong.id) }}" class="btn-action btn-del" onclick="event.stopPropagation(); return confirm('Tem certeza que deseja apagar esta congregação?');" title="Excluir">
+                                <i class="fas fa-trash-alt"></i> Excluir
                             </a>
                         </div>
                     </td>
@@ -230,5 +231,13 @@ function openDetalhes(id) {
         }
     }, 300);
 }
+
+document.querySelector('.table-premium tbody') && document.querySelector('.table-premium tbody').addEventListener('click', function(e) {
+    var row = e.target.closest('tr.row-clickable');
+    if (!row) return;
+    if (e.target.closest('.action-group') || e.target.closest('button') || e.target.closest('a')) return;
+    var id = parseInt(row.getAttribute('data-cong-id'), 10);
+    if (id) openDetalhes(id);
+});
 </script>
 {% endblock %}

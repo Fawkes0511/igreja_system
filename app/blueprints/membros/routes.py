@@ -26,8 +26,9 @@ def membros_page():
             membro.nome = request.form.get('nome')
             membro.tipo = request.form.get('tipo_membro')
 
-            # Status ativo/inativo do membro
-            membro.ativo = bool(request.form.get('ativo'))
+            # Status ativo/inativo (dropdown: 1/ativo ou 0/inativo)
+            ativo_val = request.form.get('ativo', '1')
+            membro.ativo = ativo_val in ('1', 'ativo', 'true', 'sim')
 
             membro.observacoes = request.form.get('observacoes')
             membro.responsaveis = request.form.get('responsaveis')
@@ -39,11 +40,14 @@ def membros_page():
                     '%Y-%m-%d'
                 ).date()
 
-            if request.form.get('data_batismo'):
+            # Batismo: só grava data se "Batizado?" = Sim e data preenchida
+            if request.form.get('batizado') == 'sim' and request.form.get('data_batismo'):
                 membro.data_batismo = datetime.strptime(
                     request.form.get('data_batismo'),
                     '%Y-%m-%d'
                 ).date()
+            else:
+                membro.data_batismo = None
 
             membro.congregações = Congregacao.query.filter(
                 Congregacao.id.in_(request.form.getlist('congregacoes[]'))

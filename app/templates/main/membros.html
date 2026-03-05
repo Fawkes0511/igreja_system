@@ -22,9 +22,21 @@
     .badge-visitante { background: #fef3c7; color: #92400e; }
     .badge-cong { font-size: 0.7rem; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin: 2px; display: inline-block; }
     
-    .action-group { display: flex; gap: 8px; }
-    .btn-icon { width: 32px; height: 32px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: opacity 0.2s; }
-    .btn-icon:hover { opacity: 0.85; }
+    .action-group { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+    .btn-action { background: none; border: none; padding: 6px 10px; border-radius: 6px; color: #64748b; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; text-decoration: none; font-family: inherit; }
+    .btn-action:hover { background: #f1f5f9; color: #334155; }
+    .btn-action.btn-del:hover { color: #b91c1c; background: #fef2f2; }
+    .btn-action i { font-size: 0.75rem; opacity: 0.9; }
+    /* Toggle ativo/inativo — verde = ativo, vermelho = inativo */
+    .toggle-wrap { display: inline-block; }
+    .toggle-switch { width: 44px; height: 24px; border-radius: 12px; position: relative; border: none; cursor: pointer; padding: 0; transition: background 0.2s; flex-shrink: 0; }
+    .toggle-switch.state-on { background: #22c55e; }
+    .toggle-switch.state-off { background: #dc2626; }
+    .toggle-switch .toggle-knob { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: left 0.2s, right 0.2s; }
+    .toggle-switch.state-on .toggle-knob { left: 3px; right: auto; }
+    .toggle-switch.state-off .toggle-knob { left: auto; right: 3px; }
+    .table-premium tr.row-clickable { cursor: pointer; }
+    .table-premium tr.row-clickable:hover { background: #f8fafc; }
 
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px; }
     .modal-content { background: #fff; border-radius: 16px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
@@ -38,6 +50,9 @@
     .detalhe-value { font-size: 0.95rem; color: #334155; font-weight: 500; }
 
     .scroll-list { border: 1px solid #cbd5e1; border-radius: 8px; max-height: 160px; overflow-y: auto; background: #fff; padding: 4px; }
+    /* Vínculos: altura fixa ~5 itens visíveis, o resto rola — não invade Observações */
+    .vinculos-box .scroll-list { height: 182px; max-height: 182px; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; }
+    .vinculos-box .vinculos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; min-height: 0; }
     .list-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; border-radius: 6px; font-size: 13px; color: #334155; transition: 0.2s; border-bottom: 1px solid #f1f5f9; }
     .list-item:last-child { border-bottom: none; }
     .list-item:hover { background: #f8fafc; border-color: transparent; }
@@ -65,7 +80,7 @@
         <tbody>
             {% if membros and membros|length > 0 %}
                 {% for m in membros %}
-                <tr>
+                <tr class="row-clickable" data-membro-id="{{ m.id }}">
                     <td>
                         <div class="avatar-wrapper">
                             {% if m.foto_path %}
@@ -111,27 +126,18 @@
                             <span class="badge" style="background:#fee2e2;color:#b91c1c;">Inativo</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <div class="action-group" style="justify-content: flex-end;">
-                            <button type="button" class="btn-icon" style="background: #0ea5e9;" onclick="verDetalhes({{ m.id }})" title="Ver Detalhes">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            <form method="POST" action="{{ url_for('membros.toggle_membro', id=m.id) }}" style="display:inline;">
-                                {% if m.ativo %}
-                                <button type="submit" class="btn-icon" style="background:#f97316;" title="Desativar">
-                                    <i class="fas fa-user-slash"></i>
+                    <td onclick="event.stopPropagation();">
+                        <div class="action-group">
+                            <form method="POST" action="{{ url_for('membros.toggle_membro', id=m.id) }}" class="toggle-wrap" onclick="event.stopPropagation();">
+                                <button type="submit" class="toggle-switch {% if m.ativo %}state-on{% else %}state-off{% endif %}" title="{% if m.ativo %}Ativo — clique para desativar{% else %}Inativo — clique para ativar{% endif %}">
+                                    <span class="toggle-knob"></span>
                                 </button>
-                                {% else %}
-                                <button type="submit" class="btn-icon" style="background:#22c55e;" title="Ativar">
-                                    <i class="fas fa-user-check"></i>
-                                </button>
-                                {% endif %}
                             </form>
-                            <button type="button" class="btn-icon" style="background: var(--laranja-fogo);" onclick="prepararEdicao({{ m.id }})" title="Editar">
-                                <i class="fas fa-pen"></i>
+                            <button type="button" class="btn-action" onclick="event.stopPropagation(); prepararEdicao({{ m.id }});" title="Editar">
+                                <i class="fas fa-pen"></i> Editar
                             </button>
-                            <a href="{{ url_for('membros.deletar_membro', id=m.id) }}" class="btn-icon" style="background: #ef4444;" onclick="return confirm('Tem certeza que deseja apagar este membro?')" title="Excluir">
-                                <i class="fas fa-trash"></i>
+                            <a href="{{ url_for('membros.deletar_membro', id=m.id) }}" class="btn-action btn-del" onclick="event.stopPropagation(); return confirm('Tem certeza que deseja apagar este membro?');" title="Excluir">
+                                <i class="fas fa-trash-alt"></i> Excluir
                             </a>
                         </div>
                     </td>
@@ -139,7 +145,7 @@
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">
+                    <td colspan="6" style="text-align: center; padding: 40px; color: #94a3b8;">
                         <i class="fas fa-users" style="font-size: 40px; margin-bottom: 12px; color: #cbd5e1; display: block;"></i>
                         Nenhum membro cadastrado.
                     </td>
@@ -189,14 +195,22 @@
                     </select>
                 </div>
                 <div>
-                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Batismo</label>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Batizado?</label>
+                    <select name="batizado" id="batizado" onchange="toggleDataBatismo()" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                        <option value="nao">Não batizado</option>
+                        <option value="sim">Sim</option>
+                    </select>
+                </div>
+                <div id="box_data_batismo" style="display: none;">
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Data do batismo</label>
                     <input type="date" name="data_batismo" id="data_batismo" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
                 </div>
-                <div style="display:flex; align-items:center; margin-top: 24px;">
-                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; color: #334155;">
-                        <input type="checkbox" name="ativo" id="ativo" checked style="width:16px;height:16px;">
-                        Membro ativo
-                    </label>
+                <div>
+                    <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #334155;">Status</label>
+                    <select name="ativo" id="ativo" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none;">
+                        <option value="1">Ativo</option>
+                        <option value="0">Inativo</option>
+                    </select>
                 </div>
             </div>
 
@@ -208,9 +222,9 @@
                 </div>
             </div>
 
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div class="vinculos-box" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                 <h4 style="color: #334155; margin: 0 0 12px; font-size: 14px;"><i class="fas fa-sitemap"></i> Vínculos (Marque quantos quiser)</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                <div class="vinculos-grid">
                     <div>
                         <label style="display: block; font-weight: 700; font-size: 12px; margin-bottom: 8px; color: var(--azul-marinho);">Congregações</label>
                         <div class="scroll-list">
@@ -228,7 +242,7 @@
                         </div>
                     </div>
                     <div>
-                        <label style="display: block; font-weight: 700; font-size: 12px; margin-bottom: 8px; color: var(--azul-marinho);">Cargos / Funções</label>
+                        <label style="display: block; font-weight: 700; font-size: 12px; margin-bottom: 8px; color: var(--azul-marinho);">Funções</label>
                         <div class="scroll-list">
                             {% for func in funcoes %}
                             <label class="list-item"><input type="checkbox" name="funcoes[]" value="{{ func.id }}"> {{ func.nome }}</label>
@@ -265,7 +279,7 @@
                 <div id="view-box-medico" style="display:none; grid-column: 1 / -1;"><div class="detalhe-label" style="color: #b91c1c;">Alergias / Médico</div><div class="detalhe-value" id="view-medico">-</div></div>
 
                 <div style="grid-column: 1 / -1; border-top: 1px solid #e2e8f0; padding-top: 12px;"><div class="detalhe-label">Congregações Vinculadas</div><div class="detalhe-value" id="view-cong">-</div></div>
-                <div style="grid-column: 1 / -1; border-top: 1px solid #e2e8f0; padding-top: 12px;"><div class="detalhe-label">Ministérios e Cargos</div><div class="detalhe-value" id="view-vinc">-</div></div>
+                <div style="grid-column: 1 / -1; border-top: 1px solid #e2e8f0; padding-top: 12px;"><div class="detalhe-label">Ministérios e Funções</div><div class="detalhe-value" id="view-vinc">-</div></div>
 
                 <div style="grid-column: 1 / -1; border-top: 1px solid #e2e8f0; padding-top: 12px;"><div class="detalhe-label">Observações Internas</div><div class="detalhe-value" id="view-obs" style="font-size: 0.85rem; color: #64748b;">-</div></div>
             </div>
@@ -303,7 +317,12 @@ function openModal(modalId) {
         document.getElementById('preview-icon').style.display = 'block';
 
         document.querySelectorAll('.scroll-list input[type="checkbox"]').forEach(cb => cb.checked = false);
+        document.getElementById('batizado').value = 'nao';
+        document.getElementById('data_batismo').value = '';
+        document.getElementById('box_data_batismo').style.display = 'none';
+        document.getElementById('ativo').value = '1';
         toggleCamposCrianca();
+        toggleDataBatismo();
     }
     document.getElementById(modalId).style.display = 'flex';
 }
@@ -315,6 +334,14 @@ function toggleCamposCrianca() {
     document.getElementById('campos-crianca').style.display = isCrianca ? 'block' : 'none';
 }
 
+function toggleDataBatismo() {
+    const batizado = document.getElementById('batizado').value === 'sim';
+    const box = document.getElementById('box_data_batismo');
+    const input = document.getElementById('data_batismo');
+    box.style.display = batizado ? 'block' : 'none';
+    if (!batizado) input.value = '';
+}
+
 function prepararEdicao(id) {
     const m = membrosData.find(item => item.id === id);
     if (!m) return;
@@ -323,9 +350,11 @@ function prepararEdicao(id) {
     document.getElementById('membro_id').value = m.id;
     document.getElementById('nome').value = m.nome;
     document.getElementById('data_nascimento').value = m.data_nascimento;
+    document.getElementById('batizado').value = m.data_batismo ? 'sim' : 'nao';
     document.getElementById('data_batismo').value = m.data_batismo || '';
+    document.getElementById('box_data_batismo').style.display = m.data_batismo ? 'block' : 'none';
     document.getElementById('tipo_membro').value = m.tipo;
-    document.getElementById('ativo').checked = m.ativo !== false;
+    document.getElementById('ativo').value = m.ativo !== false ? '1' : '0';
     document.getElementById('responsaveis').value = m.responsaveis || '';
     document.getElementById('info_medica').value = m.info_medica || '';
     document.getElementById('observacoes').value = m.observacoes || '';
@@ -362,6 +391,7 @@ function prepararEdicao(id) {
     }
 
     toggleCamposCrianca();
+    toggleDataBatismo();
     document.getElementById('modal-form').style.display = 'flex';
 }
 
@@ -379,7 +409,7 @@ function verDetalhes(id) {
     document.getElementById('view-nome').innerText = m.nome;
     document.getElementById('view-tipo').innerText = m.tipo;
     document.getElementById('view-nasc').innerText = m.data_nascimento ? m.data_nascimento.split('-').reverse().join('/') : '-';
-    document.getElementById('view-batismo').innerText = m.data_batismo ? m.data_batismo.split('-').reverse().join('/') : '-';
+    document.getElementById('view-batismo').innerText = m.data_batismo ? m.data_batismo.split('-').reverse().join('/') : 'Não batizado';
     document.getElementById('view-obs').innerText = m.observacoes || 'Nenhuma.';
 
     const isCrianca = m.tipo === 'Criança';
@@ -400,5 +430,14 @@ function verDetalhes(id) {
 
     document.getElementById('modal-detalhes').style.display = 'flex';
 }
+
+// Clique na linha abre os detalhes (exceto se clicar em ações)
+document.querySelector('.table-premium tbody') && document.querySelector('.table-premium tbody').addEventListener('click', function(e) {
+    var row = e.target.closest('tr.row-clickable');
+    if (!row) return;
+    if (e.target.closest('.action-group') || e.target.closest('button') || e.target.closest('a')) return;
+    var id = parseInt(row.getAttribute('data-membro-id'), 10);
+    if (id) verDetalhes(id);
+});
 </script>
 {% endblock %}

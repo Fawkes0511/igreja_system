@@ -47,13 +47,19 @@
     }
 </style>
 
-<div class="card dashboard-welcome">
-    <h3 style="margin-bottom: 8px;">Bem-vindo ao painel da igreja</h3>
-    <p style="color: #64748b; font-size: 0.95rem;">
-        Aqui você tem uma visão rápida dos principais números do sistema.
-    </p>
+<div class="card dashboard-welcome" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+        <h3 style="margin-bottom: 8px;">Bem-vindo ao painel da igreja</h3>
+        <p style="color: #64748b; font-size: 0.95rem;">
+            Aqui você tem uma visão rápida dos principais números do sistema.
+        </p>
+    </div>
+    <button type="button" id="btn-exportar-pdf" class="btn-primary" style="padding: 10px 20px;">
+        <i class="fas fa-file-pdf"></i> Exportar relatório em PDF
+    </button>
 </div>
 
+<div id="dashboard-export">
 <div class="dashboard-grid">
     <div class="dashboard-card">
         <span class="dashboard-card-title">Membros adultos</span>
@@ -86,6 +92,12 @@
         <span class="dashboard-card-value">{{ stats.total_eventos }}</span>
         <span class="dashboard-card-footer">Eventos ativos de hoje em diante (mesma lista da aba Calendário).</span>
     </div>
+
+    <div class="dashboard-card">
+        <span class="dashboard-card-title">Membros ativos</span>
+        <span class="dashboard-card-value">{{ stats.total_membros_ativos }}</span>
+        <span class="dashboard-card-footer">Membros com status ativo no sistema.</span>
+    </div>
 </div>
 
 <div class="card" style="margin-top: 30px;">
@@ -108,6 +120,14 @@
                 <option value="Adulto">Adulto</option>
                 <option value="Criança">Criança</option>
                 <option value="Visitante">Visitante</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase;">Status</label>
+            <select id="filtro-status" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;">
+                <option value="">Todos</option>
+                <option value="ativos">Ativos</option>
+                <option value="inativos">Inativos</option>
             </select>
         </div>
         <div>
@@ -137,19 +157,17 @@
                 {% endfor %}
             </select>
         </div>
-        <div style="display: flex; align-items: flex-end;">
-            <button type="button" onclick="atualizarGrafico()" class="btn-primary" style="padding: 10px 20px;">
-                <i class="fas fa-sync-alt"></i> Atualizar
-            </button>
-        </div>
     </div>
 
     <div style="position: relative; height: 360px;">
         <canvas id="chartVinculos"></canvas>
     </div>
 </div>
+</div><!-- fim #dashboard-export -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function() {
     let chartInstance = null;
@@ -159,6 +177,8 @@
         p.eixo = document.getElementById('filtro-eixo').value;
         const t = document.getElementById('filtro-tipo').value;
         if (t) p.tipo = t;
+        const s = document.getElementById('filtro-status').value;
+        if (s) p.ativo = s;
         const c = document.getElementById('filtro-congregacao').value;
         if (c) p.congregacao_id = c;
         const m = document.getElementById('filtro-ministerio').value;
@@ -175,6 +195,7 @@
         .then(data => {
             const labels = data.labels || [];
             const values = data.values || [];
+            const membersByLabel = data.members_by_label || [];
 
             if (chartInstance) chartInstance.destroy();
             const ctx = document.getElementById('chartVinculos').getContext('2d');
@@ -185,21 +206,55 @@
                     datasets: [{
                         label: 'Membros',
                         data: values,
-                        backgroundColor: 'rgba(25, 42, 86, 0.7)',
+                        backgroundColor: 'rgba(25, 42, 86, 0.72)',
                         borderColor: '#192A56',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        barPercentage: 0.55,
+                        categoryPercentage: 0.75,
+                        maxBarThickness: 56
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: { padding: { top: 8, right: 12, bottom: 8, left: 12 } },
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleFont: { size: 13, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const idx = context.dataIndex;
+                                    const list = membersByLabel[idx];
+                                    if (!list || list.length === 0) return '';
+                                    const maxShow = 15;
+                                    const lines = list.slice(0, maxShow).map(function(m) {
+                                        return '  • ' + (m.nome || m) + (m.tipo ? ' (' + m.tipo + ')' : '');
+                                    });
+                                    if (list.length > maxShow) lines.push('  … e mais ' + (list.length - maxShow) + ' membro(s).');
+                                    return '\n' + lines.join('\n');
+                                }
+                            }
+                        }
                     },
                     scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0,
+                                font: { size: 11 },
+                                maxTicksLimit: 20
+                            }
+                        },
                         y: {
                             beginAtZero: true,
-                            ticks: { stepSize: 1 }
+                            ticks: { stepSize: 1, font: { size: 11 } },
+                            grid: { color: 'rgba(0,0,0,0.06)' }
                         }
                     }
                 }
@@ -209,10 +264,56 @@
     }
 
     window.atualizarGrafico = atualizarGrafico;
-    document.querySelectorAll('#filtro-eixo, #filtro-tipo, #filtro-congregacao, #filtro-ministerio, #filtro-funcao').forEach(function(el) {
+    document.querySelectorAll('#filtro-eixo, #filtro-tipo, #filtro-status, #filtro-congregacao, #filtro-ministerio, #filtro-funcao').forEach(function(el) {
         el.addEventListener('change', atualizarGrafico);
     });
     document.addEventListener('DOMContentLoaded', atualizarGrafico);
+})();
+
+(function() {
+    document.getElementById('btn-exportar-pdf').addEventListener('click', function() {
+        var btn = this;
+        var labelOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
+
+        var el = document.getElementById('dashboard-export');
+        var opts = {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#f4f7f9'
+        };
+
+        html2canvas(el, opts).then(function(canvas) {
+            var imgData = canvas.toDataURL('image/jpeg', 0.92);
+            var pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+            var pageW = 210;
+            var pageH = 297;
+            var margin = 10;
+            var contentH = pageH - 2 * margin;
+            var w = pageW - 2 * margin;
+            var h = (canvas.height * w) / canvas.width;
+            var numPages = Math.max(1, Math.ceil(h / contentH));
+
+            pdf.addImage(imgData, 'JPEG', margin, margin, w, h);
+            for (var p = 1; p < numPages; p++) {
+                pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', margin, margin - p * contentH, w, h);
+            }
+
+            var nomeArquivo = 'relatorio-dashboard-' + new Date().toISOString().slice(0, 10) + '.pdf';
+            pdf.save(nomeArquivo);
+
+            btn.disabled = false;
+            btn.innerHTML = labelOriginal;
+        }).catch(function(err) {
+            console.error('Erro ao gerar PDF:', err);
+            btn.disabled = false;
+            btn.innerHTML = labelOriginal;
+            alert('Não foi possível gerar o PDF. Tente novamente.');
+        });
+    });
 })();
 </script>
 

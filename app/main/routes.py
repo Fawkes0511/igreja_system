@@ -48,6 +48,7 @@ def dashboard():
     stats = {
         'total_membros_adultos': Membro.query.filter_by(tipo='Adulto').count(),
         'total_membros_criancas': Membro.query.filter_by(tipo='Criança').count(),
+        'total_membros_ativos': Membro.query.filter_by(ativo=True).count(),
         'total_congregacoes': Congregacao.query.count(),
         'total_ministerios': Ministerio.query.count(),
         'total_funcoes': Funcao.query.count(),
